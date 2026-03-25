@@ -40,8 +40,8 @@ export default function Chat() {
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
   // Initialize Gemini
-  const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY || "";
-  const tavilyKey = (import.meta as any).env?.VITE_TAVILY_API_KEY || "";
+  const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
+  const tavilyKey = process.env.NEXT_PUBLIC_TAVILY_API_KEY || "";
   
   const ai = new GoogleGenAI({ apiKey });
 
