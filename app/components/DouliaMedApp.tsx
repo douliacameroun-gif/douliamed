@@ -41,7 +41,7 @@ import { supabase } from '@/lib/supabase';
 
 // --- Components for each Tab ---
 
-const SessionsTab = ({ onNewSession }: { onNewSession: () => void }) => {
+const SessionsTab = () => {
   const [sessions, setSessions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -61,17 +61,9 @@ const SessionsTab = ({ onNewSession }: { onNewSession: () => void }) => {
 
   return (
     <div className="p-10 space-y-8 bg-[#F9FAFB] min-h-full">
-      <div className="flex justify-between items-end">
-        <div>
-          <h2 className="text-3xl font-bold text-[#001F3F]">Historique des Sessions</h2>
-          <p className="text-gray-500 mt-2 font-medium">Retrouvez vos échanges précédents avec DouliaMed.</p>
-        </div>
-        <button 
-          onClick={onNewSession}
-          className="flex items-center gap-2 px-6 py-3 bg-[#008080] text-white rounded-2xl hover:bg-[#006666] transition-all shadow-lg shadow-[#008080]/20 font-bold text-sm"
-        >
-          <Plus className="w-4 h-4" /> Nouvelle Session
-        </button>
+      <div>
+        <h2 className="text-3xl font-bold text-[#001F3F]">Historique des Sessions</h2>
+        <p className="text-gray-500 mt-2">Gérez vos consultations et recherches passées.</p>
       </div>
       <div className="grid gap-6">
         {isLoading ? (
@@ -149,22 +141,15 @@ const SourcesTab = () => {
     <div className="p-10 space-y-8 bg-[#F9FAFB] min-h-full">
       <div className="flex justify-between items-end">
         <div>
-          <h2 className="text-3xl font-bold text-[#001F3F]">Bibliothèque de Sources</h2>
-          <p className="text-gray-500 mt-2 font-medium">Gérez vos documents de recherche et références académiques.</p>
+          <h2 className="text-3xl font-bold text-[#001F3F]">Sources Bibliographiques</h2>
+          <p className="text-gray-500 mt-2">Archive centralisée de vos références scientifiques.</p>
         </div>
-        <div className="flex gap-4">
-          <button 
-            onClick={() => saveSource("Nouveau Document Médical")}
-            className="flex items-center gap-2 px-6 py-3 bg-[#008080] text-white rounded-2xl hover:bg-[#006666] transition-all shadow-lg shadow-[#008080]/20 font-bold text-sm"
-          >
-            <Upload className="w-4 h-4" /> Téléverser
-          </button>
-          <button 
-            className="flex items-center gap-2 px-6 py-3 bg-white text-[#001F3F] border border-gray-200 rounded-2xl hover:bg-gray-50 transition-all shadow-sm font-bold text-sm"
-          >
-            <ExternalLink className="w-4 h-4" /> Lien URL
-          </button>
-        </div>
+        <button 
+          onClick={() => saveSource("Nouveau Document Médical")}
+          className="flex items-center gap-2 px-6 py-3 bg-[#008080] text-white rounded-2xl hover:bg-[#006666] transition-all shadow-lg shadow-[#008080]/20 font-bold text-sm"
+        >
+          <Plus className="w-4 h-4" /> Ajouter une source
+        </button>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         {isLoading ? (
@@ -199,7 +184,6 @@ const SourcesTab = () => {
 const TasksTab = () => {
   const [tasks, setTasks] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [newTaskText, setNewTaskText] = useState('');
 
   useEffect(() => {
     const fetchTasks = async () => {
@@ -208,27 +192,15 @@ const TasksTab = () => {
         .select('*')
         .order('created_at', { ascending: false });
       if (error) console.error('Erreur Supabase (Tasks):', error);
-      else {
-        if (!data || data.length === 0) {
-          // Add examples if empty
-          const examples = [
-            { text: "Finaliser l'analyse statistique du chapitre 3", completed: false },
-            { text: "Soumettre l'article à la revue 'Pediatrics'", completed: false }
-          ];
-          setTasks(examples.map((e, i) => ({ ...e, id: `ex-${i}`, created_at: new Date().toISOString() })));
-        } else {
-          setTasks(data);
-        }
-      }
+      else setTasks(data || []);
       setIsLoading(false);
     };
     fetchTasks();
   }, []);
 
-  const addTask = async () => {
-    if (!newTaskText.trim()) return;
+  const addTask = async (text: string) => {
     const newTask = {
-      text: newTaskText,
+      text,
       completed: false,
       created_at: new Date().toISOString()
     };
@@ -237,15 +209,10 @@ const TasksTab = () => {
     else {
       const { data } = await supabase.from('tasks').select('*').order('created_at', { ascending: false });
       setTasks(data || []);
-      setNewTaskText('');
     }
   };
 
   const toggleTask = async (id: string, completed: boolean) => {
-    if (id.startsWith('ex-')) {
-      setTasks(tasks.map(t => t.id === id ? { ...t, completed: !completed } : t));
-      return;
-    }
     const { error } = await supabase
       .from('tasks')
       .update({ completed: !completed })
@@ -257,10 +224,6 @@ const TasksTab = () => {
   };
 
   const deleteTask = async (id: string) => {
-    if (id.startsWith('ex-')) {
-      setTasks(tasks.filter(t => t.id !== id));
-      return;
-    }
     const { error } = await supabase.from('tasks').delete().eq('id', id);
     if (error) console.error("Erreur deleteTask:", error);
     else {
@@ -272,27 +235,16 @@ const TasksTab = () => {
     <div className="p-10 space-y-8 bg-[#F9FAFB] min-h-full">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-3xl font-bold text-[#001F3F]">Objectifs de Recherche</h2>
-          <p className="text-gray-500 mt-2 font-medium">Gérez vos tâches et jalons pour votre concours d&apos;agrégation.</p>
+          <h2 className="text-3xl font-bold text-[#001F3F]">Objectifs Académiques</h2>
+          <p className="text-gray-500 mt-2">Suivez votre progression vers l&apos;agrégation.</p>
         </div>
-      </div>
-
-      <div className="flex gap-4 bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm">
-        <input 
-          type="text" 
-          value={newTaskText}
-          onChange={(e) => setNewTaskText(e.target.value)}
-          placeholder="Ex: Finaliser l'analyse statistique..."
-          className="flex-1 bg-gray-50 border-none px-6 py-4 rounded-2xl text-[#001F3F] placeholder-gray-400 focus:ring-2 focus:ring-[#008080]/20 outline-none"
-        />
         <button 
-          onClick={addTask}
-          className="px-8 py-4 bg-[#008080] text-white rounded-2xl font-bold text-sm shadow-lg shadow-[#008080]/20 hover:bg-[#006666] transition-all"
+          onClick={() => addTask("Nouvelle tâche académique")}
+          className="px-6 py-3 bg-[#008080] text-white rounded-2xl font-bold text-sm shadow-lg shadow-[#008080]/20 hover:bg-[#006666] transition-all"
         >
-          Ajouter
+          Ajouter une tâche
         </button>
       </div>
-
       <div className="bg-white rounded-[40px] border border-gray-100 overflow-hidden shadow-sm">
         {isLoading ? (
           <div className="p-12 text-gray-400 flex items-center gap-2 justify-center">
@@ -329,155 +281,45 @@ const TasksTab = () => {
 };
 
 const ChronoTab = () => {
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [notes, setNotes] = useState<{[key: string]: string}>({});
-
-  const daysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
-  const firstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
-
-  const monthNames = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
-
-  const renderCalendar = () => {
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
-    const totalDays = daysInMonth(year, month);
-    const startDay = firstDayOfMonth(year, month);
-    const days = [];
-
-    // Empty cells for previous month
-    for (let i = 0; i < startDay; i++) {
-      days.push(<div key={`empty-${i}`} className="h-32 border border-gray-50 bg-gray-50/30" />);
-    }
-
-    // Actual days
-    for (let d = 1; d <= totalDays; d++) {
-      const dateKey = `${year}-${month + 1}-${d}`;
-      days.push(
-        <div key={d} className="h-32 border border-gray-50 p-4 hover:bg-gray-50 transition-colors group relative">
-          <span className="text-sm font-bold text-gray-400 group-hover:text-[#008080]">{d}</span>
-          <textarea 
-            value={notes[dateKey] || ''}
-            onChange={(e) => setNotes({...notes, [dateKey]: e.target.value})}
-            placeholder="Ajouter une note..."
-            className="w-full h-full bg-transparent border-none resize-none text-xs text-[#001F3F] focus:ring-0 p-0 mt-1 placeholder-gray-200"
-          />
-        </div>
-      );
-    }
-
-    return days;
-  };
+  const events = [
+    { date: "15 Avril 2026", title: "Dépôt des dossiers", desc: "Date limite pour l'inscription officielle au concours.", type: 'deadline' },
+    { date: "10 Mai 2026", title: "Validation des Titres et Travaux", desc: "Examen par le comité scientifique.", type: 'exam' },
+    { date: "15 Juin 2026", title: "Début des épreuves", desc: "Première session d'agrégation.", type: 'exam' },
+  ];
 
   return (
     <div className="p-10 space-y-8 bg-[#F9FAFB] min-h-full">
-      <div className="flex justify-between items-center">
-        <h2 className="text-3xl font-bold text-[#001F3F]">Chronogramme de Préparation</h2>
-        <div className="flex items-center gap-4 bg-white px-6 py-3 rounded-2xl border border-gray-100 shadow-sm">
-          <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1))} className="p-1 hover:text-[#008080] transition-colors">
-            <ChevronRight className="w-5 h-5 rotate-180" />
-          </button>
-          <span className="text-sm font-bold text-[#001F3F] min-w-[120px] text-center">{monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}</span>
-          <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1))} className="p-1 hover:text-[#008080] transition-colors">
-            <ChevronRight className="w-5 h-5" />
-          </button>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-[40px] border border-gray-100 shadow-sm overflow-hidden">
-        <div className="grid grid-cols-7 border-b border-gray-100 bg-gray-50/50">
-          {["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"].map(d => (
-            <div key={d} className="py-4 text-center text-[10px] font-black uppercase tracking-widest text-gray-400">{d}</div>
-          ))}
-        </div>
-        <div className="grid grid-cols-7">
-          {renderCalendar()}
-        </div>
+      <h2 className="text-3xl font-bold text-[#001F3F]">Chronogramme de Préparation</h2>
+      <div className="relative pl-12 space-y-12 before:content-[''] before:absolute before:left-[19px] before:top-4 before:bottom-4 before:w-1 before:bg-gray-100">
+        {events.map((e, i) => (
+          <div key={i} className="relative">
+            <div className={`absolute -left-[41px] top-2 w-6 h-6 rounded-full border-4 border-white z-10 shadow-sm ${
+              e.type === 'deadline' ? 'bg-red-500' : 'bg-green-500'
+            }`} />
+            <div className="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm hover:shadow-xl transition-all">
+              <span className={`text-xs font-black uppercase tracking-widest ${e.type === 'deadline' ? 'text-red-500' : 'text-green-500'}`}>{e.date}</span>
+              <h3 className="text-xl font-bold text-[#001F3F] mt-2">{e.title}</h3>
+              <p className="text-gray-500 mt-3 leading-relaxed">{e.desc}</p>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
 };
 
 const VisuTab = () => {
-  const data = [
-    { name: 'Paludisme', value: 45 },
-    { name: 'Infections Resp.', value: 30 },
-    { name: 'Diarrhées', value: 15 },
-    { name: 'Autres', value: 10 },
-  ];
-
-  const COLORS = ['#008080', '#001F3F', '#F27D26', '#8E9299'];
-
   return (
-    <div className="p-10 space-y-8 bg-[#F9FAFB] min-h-full">
-      <div>
-        <h2 className="text-3xl font-bold text-[#001F3F]">Visualisation de Données</h2>
-        <p className="text-gray-500 mt-2 font-medium">Interprétez vos statistiques de recherche avec des graphiques interactifs.</p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="bg-white p-10 rounded-[40px] border border-gray-100 shadow-sm space-y-8">
-          <h3 className="text-xl font-bold text-[#001F3F]">Répartition des Pathologies Pédiatriques (Exemple)</h3>
-          <div className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={data}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#9CA3AF', fontSize: 12}} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#9CA3AF', fontSize: 12}} dx={-10} />
-                <Tooltip 
-                  contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
-                />
-                <Area type="monotone" dataKey="value" stroke="#008080" strokeWidth={3} fillOpacity={1} fill="url(#colorValue)" />
-                <defs>
-                  <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#008080" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="#008080" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="flex justify-between items-center pt-6 border-t border-gray-50">
-            <div className="flex gap-6">
-              {data.map((item, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full" style={{backgroundColor: COLORS[i % COLORS.length]}} />
-                  <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">{item.name}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+    <div className="p-10 space-y-8 bg-[#F9FAFB] min-h-full flex flex-col items-center justify-center text-center">
+      <div className="w-full max-w-4xl p-20 border-4 border-dashed border-gray-200 rounded-[40px] bg-white space-y-6">
+        <div className="w-24 h-24 rounded-3xl bg-gray-50 flex items-center justify-center mx-auto text-gray-300">
+          <BarChart3 className="w-12 h-12" />
         </div>
-
-        <div className="space-y-8">
-          <div className="bg-white p-10 rounded-[40px] border border-gray-100 shadow-sm space-y-6">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-[#008080]/5 flex items-center justify-center text-[#008080]">
-                <Bot className="w-6 h-6" />
-              </div>
-              <h3 className="text-xl font-bold text-[#001F3F]">Interprétation IA</h3>
-            </div>
-            <div className="space-y-4 text-sm leading-relaxed text-gray-600">
-              <p>L&apos;analyse biostatistique des données visualisées révèle plusieurs points critiques :</p>
-              <ul className="space-y-3">
-                <li className="flex gap-3">
-                  <span className="font-bold text-[#008080]">Tendance Significative :</span>
-                  Une corrélation positive forte (r &gt; 0.75) est observée entre les variables clés.
-                </li>
-                <li className="flex gap-3">
-                  <span className="font-bold text-[#008080]">Stabilité :</span>
-                  L&apos;écart-type reste dans les limites de confiance de 95%, suggérant une fiabilité des données.
-                </li>
-                <li className="flex gap-3">
-                  <span className="font-bold text-[#008080]">Projection :</span>
-                  Une croissance soutenue est anticipée pour le prochain cycle d&apos;observation.
-                </li>
-              </ul>
-            </div>
-            <button className="w-full py-4 bg-[#008080] text-white rounded-2xl font-bold text-sm shadow-lg shadow-[#008080]/20 hover:bg-[#006666] transition-all flex items-center justify-center gap-2 mt-4">
-              <Download className="w-4 h-4" /> Exporter le Rapport
-            </button>
-          </div>
-        </div>
+        <h2 className="text-2xl font-bold text-[#001F3F]">En attente de vos données</h2>
+        <p className="text-gray-500 max-w-md mx-auto">Importez un fichier CSV ou Excel pour générer des visualisations biostatistiques avancées (ANOVA, Régressions).</p>
+        <button className="px-8 py-4 bg-[#008080] text-white rounded-2xl font-bold shadow-lg shadow-[#008080]/20 hover:scale-105 transition-all">
+          Importer des données
+        </button>
       </div>
     </div>
   );
@@ -485,53 +327,16 @@ const VisuTab = () => {
 
 const AnalyseTab = () => {
   return (
-    <div className="p-10 space-y-12 bg-[#F9FAFB] min-h-full max-w-6xl mx-auto">
-      <div className="text-center space-y-4">
-        <h2 className="text-4xl font-bold text-[#001F3F]">Analyse d&apos;Imagerie Médicale</h2>
-        <p className="text-gray-500 max-w-2xl mx-auto font-medium">Utilisez l&apos;IA pour assister votre diagnostic sur radios, scanners et IRM.</p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-        <div className="bg-white p-12 rounded-[40px] border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center space-y-8">
-          <div className="w-24 h-24 rounded-3xl bg-gray-50 flex items-center justify-center text-gray-300">
-            <Upload className="w-12 h-12" />
-          </div>
-          <div className="space-y-2">
-            <h3 className="text-2xl font-bold text-[#001F3F]">Téléversement de l&apos;Image</h3>
-            <p className="text-sm text-gray-400">Format supportés : DICOM, JPG, PNG</p>
-          </div>
-          <button className="px-10 py-5 bg-[#008080] text-white rounded-2xl font-bold shadow-xl shadow-[#008080]/20 hover:scale-105 transition-all">
-            Sélectionner un cliché
-          </button>
-          <button className="w-full py-4 border-2 border-[#008080] text-[#008080] rounded-2xl font-bold text-sm hover:bg-[#008080]/5 transition-all">
-            Lancer l&apos;Analyse Assistée
-          </button>
+    <div className="p-10 space-y-8 bg-[#F9FAFB] min-h-full flex flex-col items-center justify-center text-center">
+      <div className="w-full max-w-4xl p-20 border-4 border-dashed border-gray-200 rounded-[40px] bg-white space-y-6">
+        <div className="w-24 h-24 rounded-3xl bg-gray-50 flex items-center justify-center mx-auto text-gray-300">
+          <Upload className="w-12 h-12" />
         </div>
-
-        <div className="bg-white p-12 rounded-[40px] border border-gray-100 shadow-sm space-y-8 relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-4">
-            <span className="px-3 py-1 bg-orange-100 text-orange-600 text-[10px] font-black uppercase tracking-widest rounded-full">Demo</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-[#008080]/5 flex items-center justify-center text-[#008080]">
-              <FileSearch className="w-6 h-6" />
-            </div>
-            <h3 className="text-xl font-bold text-[#001F3F]">Rapport Préliminaire IA</h3>
-          </div>
-          
-          <div className="space-y-6">
-            <div className="p-6 bg-gray-50 rounded-3xl border border-gray-100">
-              <h4 className="font-bold text-[#001F3F] mb-2">Exemple de Rapport</h4>
-              <p className="text-sm text-gray-500 leading-relaxed">Téléversez un cliché pour une analyse réelle. Voici à quoi ressemblera votre rapport d&apos;assistance.</p>
-            </div>
-            
-            <div className="space-y-4 opacity-40 grayscale">
-              <div className="h-4 bg-gray-100 rounded-full w-3/4" />
-              <div className="h-4 bg-gray-100 rounded-full w-1/2" />
-              <div className="h-4 bg-gray-100 rounded-full w-5/6" />
-            </div>
-          </div>
-        </div>
+        <h2 className="text-2xl font-bold text-[#001F3F]">Téléversement de l&apos;Image</h2>
+        <p className="text-gray-500 max-w-md mx-auto">Glissez-déposez vos clichés médicaux ou radiographies pour une analyse assistée par IA.</p>
+        <button className="px-8 py-4 bg-[#008080] text-white rounded-2xl font-bold shadow-lg shadow-[#008080]/20 hover:scale-105 transition-all">
+          Sélectionner un fichier
+        </button>
       </div>
     </div>
   );
@@ -601,7 +406,7 @@ const SettingsTab = ({ mode, setMode }: { mode: string, setMode: (m: string) => 
 // --- Main App ---
 
 export default function DouliaMedApp() {
-  const [activeTab, setActiveTab] = useState('settings');
+  const [activeTab, setActiveTab] = useState('chat');
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [researchMode, setResearchMode] = useState('standard');
 
@@ -715,7 +520,7 @@ export default function DouliaMedApp() {
               className="h-full overflow-y-auto"
             >
               {activeTab === 'chat' && <Chat sessionId={currentSessionId} onNewSession={createNewSession} researchMode={researchMode} />}
-              {activeTab === 'sessions' && <SessionsTab onNewSession={createNewSession} />}
+              {activeTab === 'sessions' && <SessionsTab />}
               {activeTab === 'sources' && <SourcesTab />}
               {activeTab === 'tasks' && <TasksTab />}
               {activeTab === 'chrono' && <ChronoTab />}
