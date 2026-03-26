@@ -41,7 +41,7 @@ import { supabase } from '@/lib/supabase';
 
 // --- Components for each Tab ---
 
-const SessionsTab = () => {
+const SessionsTab = ({ setActiveTab }: { setActiveTab: (tab: string) => void }) => {
   const [sessions, setSessions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -67,7 +67,10 @@ const SessionsTab = () => {
           <h2 className="text-2xl font-black text-gray-900">Historique des Sessions</h2>
           <p className="text-sm text-gray-500">Retrouvez vos échanges précédents avec DouliaMed.</p>
         </div>
-        <button className="flex items-center gap-2 px-6 py-3 bg-[#008080] text-white rounded-xl font-bold hover:bg-[#006666] transition-all shadow-lg shadow-[#008080]/20">
+        <button 
+          onClick={() => setActiveTab('chat')}
+          className="flex items-center gap-2 px-6 py-3 bg-[#008080] text-white rounded-xl font-bold hover:bg-[#006666] transition-all shadow-lg shadow-[#008080]/20"
+        >
           <Plus className="w-5 h-5" /> Nouvelle Session
         </button>
       </div>
@@ -113,6 +116,10 @@ const SourcesTab = () => {
     fetchSources();
   }, []);
 
+  const handleAction = (action: string) => {
+    alert(`Action "${action}" en cours de préparation pour votre bibliothèque.`);
+  };
+
   return (
     <div className="p-8 space-y-6 bg-white min-h-full">
       <div className="flex justify-between items-end">
@@ -121,10 +128,16 @@ const SourcesTab = () => {
           <p className="text-sm text-gray-500">Gérez vos documents de recherche et références académiques.</p>
         </div>
         <div className="flex gap-3">
-          <button className="flex items-center gap-2 px-5 py-2.5 border-2 border-[#008080] text-[#008080] rounded-xl font-bold hover:bg-[#008080]/5 transition-all">
+          <button 
+            onClick={() => handleAction('Ajouter un lien URL')}
+            className="flex items-center gap-2 px-5 py-2.5 border-2 border-[#008080] text-[#008080] rounded-xl font-bold hover:bg-[#008080]/5 transition-all"
+          >
             <ExternalLink className="w-4 h-4" /> Lien URL
           </button>
-          <button className="flex items-center gap-2 px-5 py-2.5 bg-[#008080] text-white rounded-xl font-bold hover:bg-[#006666] transition-all shadow-lg shadow-[#008080]/20">
+          <button 
+            onClick={() => handleAction('Téléverser un document')}
+            className="flex items-center gap-2 px-5 py-2.5 bg-[#008080] text-white rounded-xl font-bold hover:bg-[#006666] transition-all shadow-lg shadow-[#008080]/20"
+          >
             <Upload className="w-4 h-4" /> Téléverser
           </button>
         </div>
@@ -358,6 +371,24 @@ const VisuTab = () => {
 
 const AnalyseTab = () => {
   const [preview, setPreview] = useState<string | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  const handleAnalyze = () => {
+    if (!preview) {
+      alert("Veuillez d'abord sélectionner un cliché.");
+      return;
+    }
+    setIsAnalyzing(true);
+    setTimeout(() => {
+      setIsAnalyzing(false);
+      alert("Analyse terminée. Rapport préliminaire disponible.");
+    }, 3000);
+  };
+
+  const handleFileSelect = () => {
+    // Mock file selection
+    setPreview("https://picsum.photos/seed/medical/800/800");
+  };
 
   return (
     <div className="p-8 space-y-8 max-w-5xl mx-auto bg-white min-h-full">
@@ -368,11 +399,17 @@ const AnalyseTab = () => {
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="space-y-6">
-          <div className="aspect-square bg-slate-50 border-2 border-dashed border-gray-200 rounded-[40px] flex flex-col items-center justify-center p-12 transition-all hover:border-[#008080] group cursor-pointer shadow-inner relative overflow-hidden">
+          <div 
+            onClick={handleFileSelect}
+            className="aspect-square bg-slate-50 border-2 border-dashed border-gray-200 rounded-[40px] flex flex-col items-center justify-center p-12 transition-all hover:border-[#008080] group cursor-pointer shadow-inner relative overflow-hidden"
+          >
             {preview ? (
               <div className="relative w-full h-full">
                 <Image src={preview} alt="Preview" fill className="object-contain rounded-2xl" />
-                <button onClick={() => setPreview(null)} className="absolute top-4 right-4 p-2 bg-white/80 rounded-full shadow-lg text-gray-800">
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setPreview(null); }} 
+                  className="absolute top-4 right-4 p-2 bg-white/80 rounded-full shadow-lg text-gray-800 hover:bg-white"
+                >
                   <Plus className="w-4 h-4 rotate-45" />
                 </button>
               </div>
@@ -390,8 +427,13 @@ const AnalyseTab = () => {
             )}
           </div>
 
-          <button className="w-full py-5 bg-[#008080] text-white rounded-3xl font-black text-lg shadow-xl shadow-[#008080]/20 hover:bg-[#006666] transition-all flex items-center justify-center gap-4">
-            <Search className="w-6 h-6" /> Lancer l&apos;Analyse Assistée
+          <button 
+            onClick={handleAnalyze}
+            disabled={isAnalyzing}
+            className="w-full py-5 bg-[#008080] text-white rounded-3xl font-black text-lg shadow-xl shadow-[#008080]/20 hover:bg-[#006666] transition-all flex items-center justify-center gap-4 disabled:opacity-50"
+          >
+            {isAnalyzing ? <Loader2 className="w-6 h-6 animate-spin" /> : <Search className="w-6 h-6" />}
+            {isAnalyzing ? "Analyse en cours..." : "Lancer l'Analyse Assistée"}
           </button>
         </div>
 
@@ -544,7 +586,7 @@ export default function DouliaMedApp() {
                 className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent"
               >
                 {activeTab === 'chat' && <Chat />}
-                {activeTab === 'sessions' && <SessionsTab />}
+                {activeTab === 'sessions' && <SessionsTab setActiveTab={setActiveTab} />}
                 {activeTab === 'sources' && <SourcesTab />}
                 {activeTab === 'tasks' && <TasksTab />}
                 {activeTab === 'chrono' && <ChronoTab />}

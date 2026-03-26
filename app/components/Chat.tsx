@@ -271,7 +271,7 @@ export default function Chat() {
                   }`}
                 >
                   <div className="prose prose-sm max-w-none prose-headings:text-[#008080] prose-strong:text-[#008080] prose-ol:list-none prose-ol:pl-0">
-                    <div dangerouslySetInnerHTML={{ __html: msg.content.replace(/\n/g, '<br/>').replace(/\d+\.\s/g, (match) => `<span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-[#008080] text-white text-[10px] font-black mr-2">${match.split('.')[0]}</span>`) }} />
+                    <div dangerouslySetInnerHTML={{ __html: msg.content.replace(/\n/g, '<br/>').replace(/\d+\.\s/g, (match: string) => `<span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-[#008080] text-white text-[10px] font-black mr-2">${match.split('.')[0]}</span>`) }} />
                   </div>
                 </div>
                 
