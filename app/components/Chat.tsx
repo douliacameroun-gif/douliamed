@@ -27,42 +27,65 @@ import { supabase } from '@/lib/supabase';
 // @ts-ignore
 // import html2pdf from 'html2pdf.js'; // Removed top-level import to fix SSR error
 
-const WELCOME_MESSAGE = "Bienvenue, Docteur Eposse. Je suis DouliaMed, votre partenaire d'intelligence médicale.\n\nVoici un résumé des capacités majeures que j'intègre actuellement pour votre période de recherche :\n\n1- Intelligence Scientifique : J'utilise le modèle Gemini 3.1 Pro. Je suis capable de structurer des raisonnements cliniques complexes et de rédiger dans un style académique rigoureux pour vos travaux.\n2- Veille en Temps Réel : J'ai un accès direct à Google Search. Je pourrai vérifier les dernières statistiques de santé ou retrouver des protocoles actualisés sur PubMed pour étayer vos thèses.\n3-Analyse de votre Bibliographie : Vous pourrez me soumettre vos fichiers PDF ou Word. Je les lirai et les synthétiserai pour vous faire gagner un temps précieux sur vos revues de littérature.\n4-Interaction Vocale : Pour libérer votre pensée, vous pourrez me parler via un microphone. En retour, je pourrai vous lire mes analyses à haute voix, vous permettant de m'écouter tout en consultant vos dossiers.\n5-Expertise en Biostatistiques : Je vous guiderai dans le choix et l'interprétation de vos tests statistiques pour valider vos hypothèses avec une rigueur mathématique constante.\n\nJe mets également à votre disposition :\n- Un Générateur de Citations Automatique (Vancouver/APA).\n- Un Chronogramme Intelligent pour votre préparation.\n- La Visualisation de Données interactive.\n\nComment pouvons-nous faire progresser la science médicale aujourd'hui ?";
+const WELCOME_MESSAGE = "Bienvenue, Docteur Eposse. Je suis DouliaMed, votre partenaire d'intelligence médicale exclusive.\n\nVoici un résumé des capacités majeures que j'intègre actuellement pour votre période de recherche :\n\n1\nIntelligence Scientifique : J'utilise le modèle Gemini 3.1 Pro. Je suis capable de structurer des raisonnements cliniques complexes et de rédiger dans un style académique rigoureux pour vos travaux.\n\n2\nVeille en Temps Réel : J'ai un accès direct à Google Search. Je pourrai vérifier les dernières statistiques de santé ou retrouver des protocoles actualisés sur PubMed pour étayer vos thèses.\n\n3\nAnalyse de votre Bibliographie : Vous pourrez me soumettre vos fichiers PDF ou Word. Je les lirai et les synthétiserai pour vous faire gagner un temps précieux sur vos revues de littérature.\n\n4\nInteraction Vocale : Pour libérer votre pensée, vous pourrez me parler via un microphone. En retour, je pourrai vous lire mes analyses à haute voix, vous permettant de m'écouter tout en consultant vos dossiers.\n\n5\nExpertise en Biostatistiques : Je vous guiderai dans le choix et l'interprétation de vos tests statistiques pour valider vos hypothèses avec une rigueur mathématique constante.\n\nJe mets également à votre disposition :\n- Un Générateur de Citations Automatique (Vancouver/APA).\n- Un Chronogramme Intelligent pour votre préparation.\n- La Visualisation de Données interactive.\n\nComment pouvons-nous vous accompagner aujourd'hui ?";
 
-const SYSTEM_INSTRUCTION = "Tu es DouliaMed, l'intelligence médicale exclusive du Docteur Charlotte Eposse. TOUTES tes réponses de recherches académiques et approfondies DOIVENT être accompagnées de sources précises (ex: [Tavily: OMS 2024]). INTERDICTION TOTALE d'utiliser des astérisques, des dièses, des tirets ou des balises HTML dans le texte brut. Pour structurer tes réponses : 1. Utilise des paragraphes fluides. 2. Pour les listes ou étapes, commence chaque point par un chiffre suivi d'un tiret (ex: 1- Première étape). 3. N'utilise PAS de majuscules pour les titres ou mots-clés. Sépare obligatoirement chaque paragraphe ou grande idée par deux sauts de ligne complets pour imposer une pause naturelle à l'oral. Rédige des phrases directes, élégantes et structurées.";
+const SYSTEM_INSTRUCTION = "Tu es DouliaMed, l'intelligence médicale exclusive du Docteur Charlotte Eposse. Tu dois STRICTEMENT respecter les consignes suivantes :\n\n1. TOUTES tes réponses de recherches académiques et approfondies DOIVENT être accompagnées de sources précises (ex: [Tavily: OMS 2024]).\n2. INTERDICTION TOTALE d'utiliser des astérisques (*), des dièses (#), des tirets (-) ou des balises HTML dans le texte brut.\n3. Pour mettre en valeur les TITRES et les MOTS CLÉS, utilise TOUJOURS le format suivant : [[MON TITRE]] ou [[MOT CLÉ]]. Ils seront automatiquement mis en gras et en couleur par l'interface.\n4. Structure tes réponses uniquement avec des paragraphes fluides.\n5. Pour les listes ou étapes, commence chaque point par un chiffre SEUL sur sa propre ligne, suivi du contenu commençant par une majuscule (ex: 1\nPremière étape). Ces points seront transformés en bulles numérotées.\n6. N'utilise JAMAIS de majuscules pour les titres ou mots-clés, sauf pour les noms propres ou acronymes médicaux.\n7. Sépare obligatoirement chaque paragraphe ou grande idée par deux sauts de ligne complets.\n8. Rédige des phrases directes, élégantes et structurées.\n9. Adapte ta profondeur d'analyse selon le MODE DE RECHERCHE spécifié dans le prompt.";
 
 interface ChatProps {
   sessionId: string | null;
   onNewSession: () => Promise<string>;
+  researchMode: string;
 }
 
 const MessageContent = ({ content, role }: { content: string, role: string }) => {
-  // Function to parse content and render numbered bubbles
+  // Function to parse content and render numbered bubbles + bold/colored text
+  const renderText = (text: string) => {
+    // Replace [[TEXT]] with bold colored span
+    const parts = text.split(/(\[\[.*?\]\])/g);
+    return parts.map((part, i) => {
+      if (part.startsWith('[[') && part.endsWith(']]')) {
+        const innerText = part.slice(2, -2);
+        return <span key={i} className="font-black text-[#008080]">{innerText}</span>;
+      }
+      return part;
+    });
+  };
+
   const renderContent = (text: string) => {
     const lines = text.split('\n\n');
     
     return lines.map((paragraph, pIdx) => {
-      // Check if paragraph is a numbered list item (supporting 1- or 1.)
-      const listMatch = paragraph.match(/^(\d+)[-.]\s+([\s\S]*)/);
+      // Check if paragraph is a single number (for the new numbered bubble format)
+      const numMatch = paragraph.trim().match(/^(\d+)$/);
       
-      if (listMatch) {
-        const num = listMatch[1];
-        const body = listMatch[2];
-        return (
-          <div key={pIdx} className="flex gap-3 items-start my-4">
-            <div className="w-8 h-8 rounded-full bg-[#008080] text-white flex items-center justify-center text-xs font-black shadow-md shadow-[#008080]/10 flex-shrink-0">
-              {num}
+      if (numMatch) {
+        const num = numMatch[1];
+        // Look ahead to see if next paragraph exists
+        const nextParagraph = lines[pIdx + 1];
+        if (nextParagraph) {
+          // We'll render the number and the next paragraph together
+          return (
+            <div key={pIdx} className="flex gap-4 items-start my-6">
+              <div className="w-10 h-10 rounded-full bg-[#008080] text-white flex items-center justify-center text-sm font-black shadow-lg shadow-[#008080]/20 flex-shrink-0 border-2 border-white">
+                {num}
+              </div>
+              <div className="bg-white border border-[#008080]/10 p-5 rounded-[24px] shadow-sm flex-1">
+                {renderText(nextParagraph)}
+              </div>
             </div>
-            <div className="bg-white border border-[#008080]/5 p-4 rounded-[20px] shadow-sm flex-1">
-              {body}
-            </div>
-          </div>
-        );
+          );
+        }
+      }
+      
+      // If this paragraph was the content of a numbered bubble, skip it (it was rendered above)
+      const prevParagraph = lines[pIdx - 1];
+      if (prevParagraph && prevParagraph.trim().match(/^(\d+)$/)) {
+        return null;
       }
 
       return (
         <p key={pIdx} className="mb-4 leading-relaxed">
-          {paragraph}
+          {renderText(paragraph)}
         </p>
       );
     });
@@ -83,7 +106,7 @@ const MessageContent = ({ content, role }: { content: string, role: string }) =>
   );
 };
 
-export default function Chat({ sessionId, onNewSession }: ChatProps) {
+export default function Chat({ sessionId, onNewSession, researchMode }: ChatProps) {
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -274,10 +297,16 @@ export default function Chat({ sessionId, onNewSession }: ChatProps) {
       // Hybrid Search
       const [supabaseCtx, tavilyCtx] = await Promise.all([
         getSupabaseContext(userText),
-        getTavilyContext(userText)
+        researchMode !== 'standard' ? getTavilyContext(userText) : Promise.resolve("")
       ]);
 
-      const contextPrompt = `CONTEXTE DOCUMENTAIRE:\n${supabaseCtx}\n\nCONTEXTE WEB RÉCENT:\n${tavilyCtx}\n\nQUESTION DU DOCTEUR: ${userText}`;
+      const modeInstructions = {
+        standard: "MODE: STANDARD. Réponse rapide, concise, basée sur les connaissances générales et le contexte fourni.",
+        approfondi: "MODE: APPROFONDI. Analyse détaillée, exploration large du web, synthèse exhaustive.",
+        academique: "MODE: ACADÉMIQUE. Rigueur scientifique maximale, focus sur les sources PubMed/OMS, style de rédaction de thèse."
+      }[researchMode as keyof typeof modeInstructions] || "";
+
+      const contextPrompt = `${modeInstructions}\n\nCONTEXTE DOCUMENTAIRE:\n${supabaseCtx}\n\nCONTEXTE WEB RÉCENT:\n${tavilyCtx}\n\nQUESTION DU DOCTEUR: ${userText}`;
 
       const chat = ai.chats.create({
         model: "gemini-3-flash-preview",
