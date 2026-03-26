@@ -21,80 +21,16 @@ import {
   Trash2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import Image from 'next/image';
 import { GoogleGenAI } from "@google/genai";
 import { supabase } from '@/lib/supabase';
 // @ts-ignore
 // import html2pdf from 'html2pdf.js'; // Removed top-level import to fix SSR error
 
-const WELCOME_MESSAGE = "Bienvenue, Docteur Eposse. Je suis DouliaMed, votre partenaire d'intelligence médicale exclusive.\n\nVoici un résumé des capacités majeures que j'intègre actuellement pour votre période de recherche :\n\n1\nIntelligence Scientifique : J'utilise le modèle Gemini 3.1 Pro. Je suis capable de structurer des raisonnements cliniques complexes et de rédiger dans un style académique rigoureux pour vos travaux.\n\n2\nVeille en Temps Réel : J'ai un accès direct à Google Search. Je pourrai vérifier les dernières statistiques de santé ou retrouver des protocoles actualisés sur PubMed pour étayer vos thèses.\n\n3\nAnalyse de votre Bibliographie : Vous pourrez me soumettre vos fichiers PDF ou Word. Je les lirai et les synthétiserai pour vous faire gagner un temps précieux sur vos revues de littérature.\n\n4\nInteraction Vocale : Pour libérer votre pensée, vous pourrez me parler via un microphone. En retour, je pourrai vous lire mes analyses à haute voix, vous permettant de m'écouter tout en consultant vos dossiers.\n\n5\nExpertise en Biostatistiques : Je vous guiderai dans le choix et l'interprétation de vos tests statistiques pour valider vos hypothèses avec une rigueur mathématique constante.\n\nJe mets également à votre disposition :\n- Un Générateur de Citations Automatique (Vancouver/APA).\n- Un Chronogramme Intelligent pour votre préparation.\n- La Visualisation de Données interactive.\n\nComment pouvons-nous vous accompagner aujourd'hui ?";
+const WELCOME_MESSAGE = "Bienvenue, Docteur Eposse. Je suis DouliaMed, votre partenaire d'intelligence médicale. Voici un résumé des capacités majeures que j'intègre actuellement pour votre période de recherche : 1. Intelligence Scientifique (Gemini 3.1 Pro) 2. Veille en Temps Réel 3. Analyse de votre Bibliographie 4. Interaction Vocale 5. Expertise en Biostatistiques. Je mets également à votre disposition : Un Générateur de Citations, Un Chronogramme et La Visualisation de Données. Comment pouvons-nous faire progresser la science médicale aujourd'hui ?";
 
-const SYSTEM_INSTRUCTION = "Tu es DouliaMed, l'intelligence médicale exclusive du Docteur Charlotte Eposse. Tu dois STRICTEMENT respecter les consignes suivantes :\n\n1. TOUTES tes réponses de recherches académiques et approfondies DOIVENT être accompagnées de sources précises (ex: [Tavily: OMS 2024]).\n2. INTERDICTION TOTALE d'utiliser des astérisques (*), des dièses (#), des tirets (-) ou des balises HTML dans le texte brut.\n3. Structure tes réponses uniquement avec des paragraphes fluides.\n4. Pour les listes ou étapes, commence chaque point par un chiffre SEUL sur sa propre ligne, suivi du contenu commençant par une majuscule (ex: 1\nPremière étape).\n5. N'utilise JAMAIS de majuscules pour les titres ou mots-clés, sauf pour les noms propres ou acronymes médicaux.\n6. Sépare obligatoirement chaque paragraphe ou grande idée par deux sauts de ligne complets.\n7. Rédige des phrases directes, élégantes et structurées.\n8. Adapte ta profondeur d'analyse selon le MODE DE RECHERCHE spécifié dans le prompt.";
+const SYSTEM_INSTRUCTION = "Tu es DouliaMed, l'intelligence médicale exclusive du Docteur Charlotte Eposse. Toujours citer tes sources à la fin de tes réponses (ex: [Tavily: OMS 2024]). N'utilise jamais de balises markdown comme les astérisques (**) ou les dièses (#) pour que la synthèse vocale soit parfaite. Fais des sauts de ligne réguliers.";
 
-interface ChatProps {
-  sessionId: string | null;
-  onNewSession: () => Promise<string>;
-  researchMode: string;
-}
-
-const MessageContent = ({ content, role }: { content: string, role: string }) => {
-  // Function to parse content and render numbered bubbles
-  const renderContent = (text: string) => {
-    const lines = text.split('\n\n');
-    
-    return lines.map((paragraph, pIdx) => {
-      // Check if paragraph is a single number (for the new numbered bubble format)
-      const numMatch = paragraph.trim().match(/^(\d+)$/);
-      
-      if (numMatch) {
-        const num = numMatch[1];
-        // Look ahead to see if next paragraph exists
-        const nextParagraph = lines[pIdx + 1];
-        if (nextParagraph) {
-          // We'll render the number and the next paragraph together
-          return (
-            <div key={pIdx} className="flex gap-3 items-start my-4">
-              <div className="w-8 h-8 rounded-full bg-[#008080] text-white flex items-center justify-center text-xs font-black shadow-md shadow-[#008080]/10 flex-shrink-0">
-                {num}
-              </div>
-              <div className="bg-white border border-[#008080]/5 p-4 rounded-[20px] shadow-sm flex-1">
-                {nextParagraph}
-              </div>
-            </div>
-          );
-        }
-      }
-      
-      // If this paragraph was the content of a numbered bubble, skip it (it was rendered above)
-      const prevParagraph = lines[pIdx - 1];
-      if (prevParagraph && prevParagraph.trim().match(/^(\d+)$/)) {
-        return null;
-      }
-
-      return (
-        <p key={pIdx} className="mb-4 leading-relaxed">
-          {paragraph}
-        </p>
-      );
-    });
-  };
-
-  return (
-    <div className={`space-y-2 ${role === 'user' ? 'text-right' : 'text-left'}`}>
-      <div 
-        className={`p-5 rounded-[28px] text-sm shadow-sm border ${
-          role === 'user' 
-            ? 'bg-[#e6f2f2] text-[#001F3F] border-[#008080]/10 rounded-tr-none' 
-            : 'bg-white text-[#001F3F] border-gray-100 rounded-tl-none'
-        }`}
-      >
-        {renderContent(content)}
-      </div>
-    </div>
-  );
-};
-
-export default function Chat({ sessionId, onNewSession, researchMode }: ChatProps) {
+export default function Chat() {
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -104,8 +40,8 @@ export default function Chat({ sessionId, onNewSession, researchMode }: ChatProp
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
   // Initialize Gemini
-  const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
-  const tavilyKey = process.env.NEXT_PUBLIC_TAVILY_API_KEY || "";
+  const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY || "";
+  const tavilyKey = (import.meta as any).env?.VITE_TAVILY_API_KEY || "";
   
   const ai = new GoogleGenAI({ apiKey });
 
@@ -116,45 +52,26 @@ export default function Chat({ sessionId, onNewSession, researchMode }: ChatProp
   useEffect(() => {
     // Load messages from Supabase or start with welcome
     const loadMessages = async () => {
-      try {
-        if (!sessionId) {
-          // Add welcome message if no session yet
-          const welcome = {
-            id: 'welcome',
-            role: 'assistant',
-            content: WELCOME_MESSAGE,
-            created_at: new Date().toISOString()
-          };
-          setMessages([welcome]);
-          return;
-        }
-
-        const { data, error } = await supabase
-          .from('messages')
-          .select('*')
-          .eq('session_id', sessionId)
-          .order('created_at', { ascending: true });
-        
-        if (error) throw error;
-
-        if (data && data.length > 0) {
-          setMessages(data);
-        } else {
-          // Add welcome message if no history in this session
-          const welcome = {
-            id: 'welcome',
-            role: 'assistant',
-            content: WELCOME_MESSAGE,
-            created_at: new Date().toISOString()
-          };
-          setMessages([welcome]);
-        }
-      } catch (err) {
-        console.error("Erreur Supabase (Chargement):", err);
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .order('created_at', { ascending: true });
+      
+      if (data && data.length > 0) {
+        setMessages(data);
+      } else {
+        // Add welcome message if no history
+        const welcome = {
+          id: 'welcome',
+          role: 'assistant',
+          content: WELCOME_MESSAGE,
+          created_at: new Date().toISOString()
+        };
+        setMessages([welcome]);
       }
     };
     loadMessages();
-  }, [sessionId]);
+  }, []);
 
   useEffect(() => {
     scrollToBottom();
@@ -262,39 +179,20 @@ export default function Chat({ sessionId, onNewSession, researchMode }: ChatProp
     setInput('');
     setIsGenerating(true);
 
+    const userMsg = { role: 'user', content: userText, created_at: new Date().toISOString() };
+    setMessages(prev => [...prev, userMsg]);
+
+    // Save user message
+    await supabase.from('messages').insert([userMsg]);
+
     try {
-      // Ensure session exists
-      let activeSessionId = sessionId;
-      if (!activeSessionId) {
-        activeSessionId = await onNewSession();
-      }
-
-      const userMsg = { 
-        role: 'user', 
-        content: userText, 
-        created_at: new Date().toISOString(),
-        session_id: activeSessionId
-      };
-      
-      setMessages(prev => [...prev, userMsg]);
-
-      // Save user message
-      const { error: userInsertError } = await supabase.from('messages').insert([userMsg]);
-      if (userInsertError) console.error("Erreur Supabase (Insert User Msg):", userInsertError);
-
       // Hybrid Search
       const [supabaseCtx, tavilyCtx] = await Promise.all([
         getSupabaseContext(userText),
-        researchMode !== 'standard' ? getTavilyContext(userText) : Promise.resolve("")
+        getTavilyContext(userText)
       ]);
 
-      const modeInstructions = {
-        standard: "MODE: STANDARD. Réponse rapide, concise, basée sur les connaissances générales et le contexte fourni.",
-        approfondi: "MODE: APPROFONDI. Analyse détaillée, exploration large du web, synthèse exhaustive.",
-        academique: "MODE: ACADÉMIQUE. Rigueur scientifique maximale, focus sur les sources PubMed/OMS, style de rédaction de thèse."
-      }[researchMode as keyof typeof modeInstructions] || "";
-
-      const contextPrompt = `${modeInstructions}\n\nCONTEXTE DOCUMENTAIRE:\n${supabaseCtx}\n\nCONTEXTE WEB RÉCENT:\n${tavilyCtx}\n\nQUESTION DU DOCTEUR: ${userText}`;
+      const contextPrompt = `CONTEXTE DOCUMENTAIRE:\n${supabaseCtx}\n\nCONTEXTE WEB RÉCENT:\n${tavilyCtx}\n\nQUESTION DU DOCTEUR: ${userText}`;
 
       const chat = ai.chats.create({
         model: "gemini-3-flash-preview",
@@ -313,18 +211,15 @@ export default function Chat({ sessionId, onNewSession, researchMode }: ChatProp
       const assistantMsg = { 
         role: 'assistant', 
         content: responseText, 
-        created_at: new Date().toISOString(),
-        session_id: activeSessionId
+        created_at: new Date().toISOString() 
       };
       
       setMessages(prev => [...prev, assistantMsg]);
       
       // Save assistant message
-      const { error: assistantInsertError } = await supabase.from('messages').insert([assistantMsg]);
-      if (assistantInsertError) console.error("Erreur Supabase (Insert Assistant Msg):", assistantInsertError);
-
+      await supabase.from('messages').insert([assistantMsg]);
     } catch (error) {
-      console.error('Gemini/Supabase error:', error);
+      console.error('Gemini error:', error);
       const errorMsg = { 
         role: 'assistant', 
         content: "Désolé Docteur, une erreur est survenue. Veuillez vérifier votre connexion ou votre clé API.", 
@@ -349,66 +244,92 @@ export default function Chat({ sessionId, onNewSession, researchMode }: ChatProp
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#F9FAFB] font-sans">
+    <div className="flex flex-col h-full bg-white font-sans">
+      {/* Chat Header */}
+      <div className="px-8 py-4 border-b border-gray-100 flex justify-between items-center bg-white/80 backdrop-blur-md sticky top-0 z-10">
+        <div>
+          <h2 className="text-lg font-black text-gray-900">Consultation IA</h2>
+          <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">Session de Recherche Active</p>
+        </div>
+        <button 
+          onClick={clearChat}
+          className="p-2 text-gray-400 hover:text-red-500 transition-colors rounded-lg hover:bg-red-50"
+          title="Effacer la session"
+        >
+          <Trash2 className="w-5 h-5" />
+        </button>
+      </div>
+
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto bg-[#F9FAFB]">
-        <div className="max-w-4xl mx-auto p-8 space-y-10">
-          <AnimatePresence initial={false}>
-            {messages.map((msg, idx) => (
-              <motion.div
-                key={msg.id || idx}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={`flex gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
-              >
-                <div className="max-w-[85%]">
-                  <div id={`msg-${msg.id || idx}`}>
-                    <MessageContent content={msg.content} role={msg.role} />
-                  </div>
-                  
-                  {msg.role === 'assistant' && (
-                    <div className="flex items-center gap-3 mt-4 px-2">
-                      <button 
-                        onClick={() => handleSpeak(msg.content)}
-                        className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[#008080] bg-[#008080]/5 hover:bg-[#008080]/10 rounded-xl transition-all"
-                      >
-                        <Volume2 className="w-3.5 h-3.5" /> Écouter
-                      </button>
-                      <button 
-                        onClick={() => handleExportPDF(msg.id || idx)}
-                        className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-500 bg-gray-50 hover:bg-gray-100 rounded-xl transition-all"
-                      >
-                        <Download className="w-3.5 h-3.5" /> PDF
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-          
-          {isGenerating && (
-            <div className="flex gap-4">
-              <div className="w-10 h-10 rounded-2xl bg-[#008080] flex items-center justify-center text-white shadow-lg shadow-[#008080]/20">
-                <Loader2 className="w-5 h-5 animate-spin" />
+      <div className="flex-1 overflow-y-auto p-8 space-y-8 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+        <AnimatePresence initial={false}>
+          {messages.map((msg, idx) => (
+            <motion.div
+              key={msg.id || idx}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`flex gap-6 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
+            >
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm ${
+                msg.role === 'user' ? 'bg-gray-100 text-gray-500' : 'bg-[#008080]/10 text-[#008080]'
+              }`}>
+                {msg.role === 'user' ? <User className="w-5 h-5" /> : <Bot className="w-5 h-5" />}
               </div>
-              <div className="bg-white border border-gray-100 p-6 rounded-[28px] rounded-tl-none shadow-sm">
-                <div className="flex gap-1.5">
-                  <div className="w-1.5 h-1.5 bg-[#008080] rounded-full animate-bounce"></div>
-                  <div className="w-1.5 h-1.5 bg-[#008080] rounded-full animate-bounce [animation-delay:0.2s]"></div>
-                  <div className="w-1.5 h-1.5 bg-[#008080] rounded-full animate-bounce [animation-delay:0.4s]"></div>
+              
+              <div className={`max-w-[75%] space-y-3 ${msg.role === 'user' ? 'text-right' : 'text-left'}`}>
+                <div 
+                  id={`msg-${msg.id || idx}`}
+                  className={`p-5 rounded-2xl text-sm leading-relaxed shadow-sm border ${
+                    msg.role === 'user' 
+                      ? 'bg-gray-800 text-white border-gray-800 rounded-tr-none' 
+                      : 'bg-white text-gray-800 border-gray-100 rounded-tl-none'
+                  }`}
+                >
+                  {msg.content}
                 </div>
+                
+                {msg.role === 'assistant' && (
+                  <div className="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button 
+                      onClick={() => handleSpeak(msg.content)}
+                      className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[#008080] bg-[#008080]/5 rounded-lg hover:bg-[#008080]/10 transition-all"
+                    >
+                      <Volume2 className="w-3.5 h-3.5" /> Écouter
+                    </button>
+                    <button 
+                      onClick={() => handleExportPDF(msg.id || idx)}
+                      className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 bg-gray-50 rounded-lg hover:bg-gray-100 transition-all"
+                    >
+                      <Download className="w-3.5 h-3.5" /> PDF
+                    </button>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+        
+        {isGenerating && (
+          <div className="flex gap-6">
+            <div className="w-10 h-10 rounded-xl bg-[#008080]/10 flex items-center justify-center text-[#008080]">
+              <Loader2 className="w-5 h-5 animate-spin" />
+            </div>
+            <div className="bg-gray-50 p-5 rounded-2xl rounded-tl-none border border-gray-100">
+              <div className="flex gap-1.5">
+                <div className="w-1.5 h-1.5 bg-[#008080] rounded-full animate-bounce"></div>
+                <div className="w-1.5 h-1.5 bg-[#008080] rounded-full animate-bounce [animation-delay:0.2s]"></div>
+                <div className="w-1.5 h-1.5 bg-[#008080] rounded-full animate-bounce [animation-delay:0.4s]"></div>
               </div>
             </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
       </div>
 
       {/* Input Zone */}
-      <div className="p-4 bg-white/80 backdrop-blur-xl border-t border-gray-100">
+      <div className="p-8 bg-white border-t border-gray-100">
         <div className="max-w-4xl mx-auto">
-          <form onSubmit={handleSubmit} className="relative flex items-center gap-4 bg-white border border-gray-200 p-2 rounded-[32px] shadow-xl shadow-gray-200/50 focus-within:border-[#008080] focus-within:ring-4 focus-within:ring-[#008080]/5 transition-all">
+          <form onSubmit={handleSubmit} className="relative flex items-center gap-4 bg-slate-50 border border-gray-200 p-2 rounded-2xl shadow-inner focus-within:border-[#008080] transition-all">
             <input 
               type="file" 
               ref={fileInputRef} 
@@ -419,7 +340,7 @@ export default function Chat({ sessionId, onNewSession, researchMode }: ChatProp
             <button 
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="p-2 text-gray-400 hover:text-[#008080] transition-all rounded-2xl hover:bg-gray-50"
+              className="p-3 text-gray-400 hover:text-[#008080] transition-colors rounded-xl hover:bg-white"
             >
               <Paperclip className="w-6 h-6" />
             </button>
@@ -428,14 +349,14 @@ export default function Chat({ sessionId, onNewSession, researchMode }: ChatProp
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Posez votre question scientifique au Dr. Eposse..."
-              className="flex-1 bg-transparent border-none py-2 text-base text-[#001F3F] placeholder-gray-400 focus:outline-none"
+              placeholder="Posez votre question médicale..."
+              className="flex-1 bg-transparent border-none py-3 text-gray-800 placeholder-gray-400 focus:outline-none text-sm font-medium"
             />
 
             <button 
               type="button"
               onClick={startListening}
-              className={`p-2 transition-all rounded-2xl ${isListening ? 'text-red-500 bg-red-50 animate-pulse' : 'text-gray-400 hover:text-[#008080] hover:bg-gray-50'}`}
+              className={`p-3 transition-colors rounded-xl hover:bg-white ${isListening ? 'text-red-500 animate-pulse' : 'text-gray-400 hover:text-[#008080]'}`}
             >
               {isListening ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
             </button>
@@ -443,18 +364,20 @@ export default function Chat({ sessionId, onNewSession, researchMode }: ChatProp
             <button
               type="submit"
               disabled={isGenerating || !input.trim()}
-              className={`p-3 rounded-2xl transition-all shadow-lg ${
+              className={`p-3 rounded-xl transition-all ${
                 input.trim() 
-                  ? 'bg-[#008080] text-white shadow-[#008080]/30 hover:scale-105 active:scale-95' 
-                  : 'bg-gray-100 text-gray-400 shadow-none'
+                  ? 'bg-[#008080] text-white shadow-lg shadow-[#008080]/20 hover:scale-105' 
+                  : 'bg-gray-200 text-gray-400'
               }`}
             >
               <Send className="w-6 h-6" />
             </button>
           </form>
           
-          <div className="mt-3 flex justify-center gap-8 text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">
-            <span>PROPULSÉ PAR DOULIA</span>
+          <div className="mt-4 flex justify-center gap-8 text-[10px] font-black text-gray-300 uppercase tracking-[0.2em]">
+            <span className="flex items-center gap-2"><Search className="w-3 h-3" /> Veille Temps Réel</span>
+            <span className="flex items-center gap-2"><Bot className="w-3 h-3" /> Gemini 3 Flash</span>
+            <span className="flex items-center gap-2"><FileText className="w-3 h-3" /> Analyse Bibliographique</span>
           </div>
         </div>
       </div>
