@@ -1,9 +1,5 @@
 {
   "name": "DouliaMed",
-  "description": "Assistant médical IA exclusif pour le Docteur Charlotte Eposse.",
-  "requestFramePermissions": [
-    "camera",
-    "microphone",
-    "geolocation"
-  ]
+  "description": "Assistant médical IA haut de gamme pour le Docteur Charlotte Eposse.",
+  "requestFramePermissions": []
 }
