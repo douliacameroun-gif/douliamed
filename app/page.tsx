@@ -38,886 +38,558 @@ import {
   ResponsiveContainer
 } from 'recharts';
 import Image from 'next/image';
-import { GoogleGenAI } from "@google/genai";
-import { createClient } from '@supabase/supabase-js';
+import Markdown from 'react-markdown';
 
-// --- Supabase Client ---
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder';
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Types
+interface Message {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+  sources?: string[];
+}
 
-// --- Constants ---
-const WELCOME_MESSAGE = "Bienvenue, **Docteur Eposse**. Je suis **DouliaMed**, votre partenaire d'intelligence médicale exclusive.\n\nVoici un résumé des capacités majeures que j'intègre actuellement pour votre période de recherche :\n\n1. **Intelligence Scientifique (Gemini 3.1 Pro)** : Analyse de données complexes, aide au diagnostic et rédaction académique.\n2. **Veille en Temps Réel** : Accès aux dernières publications (PubMed, OMS) via ma recherche hybride.\n3. **Analyse de votre Bibliographie** : Résumé et synthèse de vos documents PDF ou Word téléchargés.\n4. **Interaction Vocale** : Posez vos questions à l'oral pour une fluidité totale.\n5. **Expertise en Biostatistiques** : Vérification de la cohérence de vos résultats (ANOVA, régressions, IC 95%).\n\nJe mets également à votre disposition des outils dédiés : Un **Générateur de Citations**, Un **Chronogramme de Recherche** et La **Visualisation de Données**.\n\nComment pouvons-nous faire progresser la science médicale aujourd'hui ?";
+interface Session {
+  id: string;
+  title: string;
+  lastMessage: string;
+  date: Date;
+}
 
-const SYSTEM_INSTRUCTION = "Tu es DouliaMed, l'intelligence médicale exclusive du Docteur Charlotte Eposse. RÈGLES DE RÉPONSE : 1. Mets TOUJOURS les TITRES et les MOTS-CLÉS en GRAS en utilisant la syntaxe markdown **TEXTE**. 2. Utilise TOUJOURS des LISTES NUMÉROTÉES (1., 2., 3.) pour les étapes ou niveaux. 3. Citer tes sources à la fin (ex: [Tavily: OMS 2024]). 4. Fais des sauts de ligne réguliers pour la clarté. 5. Ton ton est académique, rigoureux et respectueux.";
+interface Source {
+  id: string;
+  title: string;
+  type: 'pdf' | 'doc' | 'web';
+  date: string;
+}
 
-// --- Sub-components ---
+// Mock Data
+const MOCK_SESSIONS: Session[] = [
+  { id: '1', title: 'Protocole Paludisme Grave', lastMessage: 'Quels sont les critères de gravité de l\'OMS 2024 ?', date: new Date() },
+  { id: '2', title: 'Analyse Statistique ANOVA', lastMessage: 'La p-value est de 0.034, ce qui est significatif.', date: new Date(Date.now() - 86400000) },
+  { id: '3', title: 'Rédaction Agrégation', lastMessage: 'Structure de la leçon sur la drépanocytose.', date: new Date(Date.now() - 172800000) },
+];
 
-const SessionsTab = ({ setActiveTab }: { setActiveTab: (tab: string) => void }) => {
-  const [sessions, setSessions] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+const MOCK_SOURCES: Source[] = [
+  { id: '1', title: 'OMS_Malaria_Report_2024.pdf', type: 'pdf', date: '24/03/2026' },
+  { id: '2', title: 'Protocoles_Pediatrie_Douala.docx', type: 'doc', date: '20/03/2026' },
+  { id: '3', title: 'Lancet_Sickle_Cell_Review.pdf', type: 'pdf', date: '15/03/2026' },
+];
 
-  useEffect(() => {
-    const fetchSessions = async () => {
-      const { data, error } = await supabase
-        .from('messages')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(20);
-
-      if (error) console.error('Error fetching sessions:', error);
-      else setSessions(data || []);
-      setIsLoading(false);
-    };
-    fetchSessions();
-  }, []);
-
-  return (
-    <div className="p-6 space-y-4 bg-transparent min-h-full">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">Historique des Sessions</h2>
-          <p className="text-xs text-gray-500">Retrouvez vos échanges précédents avec DouliaMed.</p>
-        </div>
-        <button 
-          onClick={() => setActiveTab('chat')}
-          className="flex items-center gap-1.5 px-4 py-2 bg-[#008080] text-white text-xs font-bold hover:bg-[#006666] transition-all shadow-md rounded-lg"
-        >
-          <Plus className="w-4 h-4" /> Nouvelle Session
-        </button>
-      </div>
-      
-      <div className="grid gap-3">
-        {isLoading ? (
-          <div className="flex items-center gap-2 text-gray-400 text-xs">
-            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Chargement...
-          </div>
-        ) : sessions.length === 0 ? (
-          <div className="text-gray-400 py-8 text-center border-2 border-dashed border-gray-100 rounded-2xl text-xs">
-            Aucune session trouvée. Commencez une nouvelle discussion !
-          </div>
-        ) : (
-          sessions.map(s => (
-            <div 
-              key={s.id} 
-              onClick={() => setActiveTab('chat')}
-              className="p-4 bg-white border border-gray-100 rounded-2xl hover:border-[#008080] transition-all cursor-pointer group shadow-sm"
-            >
-              <div className="flex justify-between items-start mb-1">
-                <h3 className="font-bold text-xs text-gray-800 group-hover:text-[#008080] transition-colors uppercase tracking-wide">
-                  {s.role === 'user' ? 'Question du Docteur' : 'Réponse de DouliaMed'}
-                </h3>
-                <span className="text-[10px] text-gray-400 font-bold">{new Date(s.created_at).toLocaleDateString('fr-FR')}</span>
-              </div>
-              <p className="text-xs text-gray-500 line-clamp-1 leading-relaxed">{s.content}</p>
-            </div>
-          ))
-        )}
-      </div>
-    </div>
-  );
-};
-
-const SourcesTab = () => {
-  const [sources, setSources] = useState<any[]>([]);
-
-  useEffect(() => {
-    const fetchSources = async () => {
-      const { data, error } = await supabase
-        .from('documents')
-        .select('*');
-      if (error) console.error('Error fetching sources:', error);
-      else setSources(data || []);
-    };
-    fetchSources();
-  }, []);
-
-  const handleAction = (action: string) => {
-    alert(`Action "${action}" en cours de préparation pour votre bibliothèque.`);
-  };
-
-  return (
-    <div className="p-6 space-y-4 bg-transparent min-h-full">
-      <div className="flex justify-between items-end">
-        <div>
-          <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">Bibliothèque de Sources</h2>
-          <p className="text-xs text-gray-500">Gérez vos documents de recherche et références académiques.</p>
-        </div>
-        <div className="flex gap-2">
-          <button 
-            onClick={() => handleAction('Ajouter un lien URL')}
-            className="flex items-center gap-1.5 px-3 py-1.5 border border-[#008080] text-[#008080] text-[11px] font-bold hover:bg-[#008080]/5 transition-all rounded-lg"
-          >
-            <ExternalLink className="w-3.5 h-3.5" /> Lien URL
-          </button>
-          <button 
-            onClick={() => handleAction('Téléverser un document')}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#008080] text-white text-[11px] font-bold hover:bg-[#006666] transition-all shadow-md rounded-lg"
-          >
-            <Upload className="w-3.5 h-3.5" /> Téléverser
-          </button>
-        </div>
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {sources.length === 0 ? (
-          <div className="text-gray-400 col-span-full py-8 text-center border-2 border-dashed border-gray-100 rounded-2xl text-xs">
-            Aucun document dans l&apos;archive médicale.
-          </div>
-        ) : (
-          sources.map(s => (
-            <div key={s.id} className="p-4 bg-white border border-gray-100 rounded-2xl group shadow-sm">
-              <div className="w-10 h-10 rounded-lg bg-[#008080]/10 flex items-center justify-center mb-3 text-[#008080]">
-                <FileText className="w-5 h-5" />
-              </div>
-              <h3 className="font-bold text-xs text-gray-800 mb-0.5 group-hover:text-[#008080] transition-colors uppercase tracking-wide">{s.title}</h3>
-              <p className="text-[10px] text-gray-400 mb-3">{s.author || 'Auteur inconnu'} • {s.type || 'PDF'}</p>
-              <div className="flex gap-1.5">
-                <button className="flex-1 text-[9px] py-1.5 border border-gray-100 rounded-md hover:bg-gray-50 transition-colors font-bold text-gray-500 uppercase">Vancouver</button>
-                <button className="flex-1 text-[9px] py-1.5 border border-gray-100 rounded-md hover:bg-gray-50 transition-colors font-bold text-gray-500 uppercase">APA</button>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-    </div>
-  );
-};
-
-const TasksTab = () => {
-  const [tasks, setTasks] = useState([
-    { id: 1, text: "Finaliser l'analyse statistique du chapitre 3", completed: false },
-    { id: 2, text: "Soumettre l'article à la revue 'Pediatrics'", completed: false },
-    { id: 3, text: "Finaliser le dossier Titres et Travaux", completed: true },
-    { id: 4, text: "Préparer la leçon de 24h (Simulation)", completed: false },
-  ]);
-  const [newTask, setNewTask] = useState('');
-
-  const addTask = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTask.trim()) return;
-    setTasks([{ id: Date.now(), text: newTask, completed: false }, ...tasks]);
-    setNewTask('');
-  };
-
-  return (
-    <div className="p-6 space-y-4 bg-white min-h-full">
-      <div>
-        <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">Objectifs de Recherche</h2>
-        <p className="text-xs text-gray-500">Gérez vos tâches et jalons pour votre concours d&apos;agrégation.</p>
-      </div>
-
-      <form onSubmit={addTask} className="flex gap-2">
-        <input 
-          type="text" 
-          value={newTask}
-          onChange={(e) => setNewTask(e.target.value)}
-          placeholder="Ex: Finaliser l'analyse statistique..."
-          className="flex-1 px-4 py-2 bg-slate-50 border border-gray-200 rounded-lg focus:outline-none focus:border-[#008080] transition-all text-xs"
-        />
-        <button type="submit" className="px-4 py-2 bg-[#008080] text-white rounded-lg text-xs font-bold hover:bg-[#006666] transition-all shadow-sm">
-          Ajouter
-        </button>
-      </form>
-
-      <div className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm">
-        {tasks.map(t => (
-          <div key={t.id} className="flex items-center gap-3 p-4 border-b border-gray-50 last:border-0 hover:bg-slate-50 transition-colors">
-            <button 
-              onClick={() => setTasks(tasks.map(task => task.id === t.id ? {...task, completed: !task.completed} : task))}
-              className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
-                t.completed ? 'bg-[#008080] border-[#008080] text-white' : 'border-gray-200'
-              }`}
-            >
-              {t.completed && <CheckSquare className="w-3 h-3" />}
-            </button>
-            <span className={`flex-1 text-xs font-bold ${t.completed ? 'text-gray-300 line-through' : 'text-gray-700'}`}>{t.text}</span>
-            <button onClick={() => setTasks(tasks.filter(task => task.id !== t.id))} className="text-gray-300 hover:text-red-500 transition-colors">
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-const ChronoTab = () => {
-  const events = [
-    { date: "15 Avril 2026", title: "Dépôt des dossiers", desc: "Date limite pour l'inscription officielle au concours." },
-    { date: "10 Mai 2026", title: "Validation des Titres et Travaux", desc: "Examen par le comité scientifique." },
-    { date: "15 Juin 2026", title: "Début des épreuves", desc: "Première session d'agrégation." },
-  ];
-
-  const days = Array.from({ length: 31 }, (_, i) => i + 1);
-
-  return (
-    <div className="p-6 space-y-6 bg-white min-h-full flex flex-col lg:flex-row gap-6">
-      <div className="flex-1 space-y-4">
-        <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">Chronogramme Critique</h2>
-        <div className="relative pl-6 space-y-8 before:content-[''] before:absolute before:left-[9px] before:top-0 before:bottom-0 before:w-0.5 before:bg-gray-100">
-          {events.map((e, i) => (
-            <div key={i} className="relative">
-              <div className="absolute -left-[23px] top-1 w-4 h-4 rounded-full bg-white border-2 border-[#008080] z-10" />
-              <div className="p-4 bg-white border border-gray-100 rounded-2xl hover:shadow-md transition-all shadow-sm">
-                <span className="text-[10px] font-black text-[#008080] uppercase tracking-wider">{e.date}</span>
-                <h3 className="text-sm font-black text-gray-800 mt-0.5 uppercase tracking-wide">{e.title}</h3>
-                <p className="text-xs text-gray-500 mt-1 leading-relaxed">{e.desc}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="w-full lg:w-72 space-y-4">
-        <div className="bg-slate-50 p-4 rounded-2xl border border-gray-100 shadow-inner">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest">Mars 2026</h3>
-            <div className="flex gap-1.5">
-              <button 
-                onClick={() => alert("Mois précédent")}
-                className="p-1 bg-white rounded-md border border-gray-200 hover:bg-gray-50 transition-colors"
-              >
-                <ChevronRight className="w-3 h-3 rotate-180" />
-              </button>
-              <button 
-                onClick={() => alert("Mois suivant")}
-                className="p-1 bg-white rounded-md border border-gray-200 hover:bg-gray-50 transition-colors"
-              >
-                <ChevronRight className="w-3 h-3" />
-              </button>
-            </div>
-          </div>
-          <div className="grid grid-cols-7 gap-1 mb-3">
-            {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((d, i) => (
-              <div key={`${d}-${i}`} className="text-center text-[9px] font-black text-gray-400 uppercase">{d}</div>
-            ))}
-            {days.map(d => (
-              <button 
-                key={d} 
-                className={`aspect-square flex items-center justify-center text-[10px] font-bold rounded-md transition-all ${
-                  d === 25 ? 'bg-[#008080] text-white shadow-md shadow-[#008080]/20' : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-50'
-                }`}
-              >
-                {d}
-              </button>
-            ))}
-          </div>
-          <div className="space-y-2">
-            <h4 className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Notes du jour</h4>
-            <textarea 
-              placeholder="Ajoutez vos notes..."
-              className="w-full bg-white border border-gray-200 rounded-lg p-2 text-[10px] focus:outline-none focus:border-[#008080] min-h-[80px]"
-            />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const VisuTab = () => {
-  const data = [
-    { name: 'Paludisme', value: 60 },
-    { name: 'Infections Resp.', value: 45 },
-    { name: 'Diarrhées', value: 30 },
-    { name: 'Autres', value: 15 },
-  ];
-
-  return (
-    <div className="flex flex-col lg:flex-row h-full bg-white">
-      <div className="flex-1 p-6 space-y-4">
-        <div>
-          <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">Visualisation de Données</h2>
-          <p className="text-xs text-gray-500">Interprétez vos statistiques de recherche avec des graphiques interactifs.</p>
-        </div>
-
-        <div className="bg-slate-50 p-6 rounded-2xl border border-gray-100 shadow-inner">
-          <h3 className="text-sm font-black text-gray-800 mb-6 uppercase tracking-wide">Répartition des Pathologies Pédiatriques (Exemple)</h3>
-          <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={data}>
-                <defs>
-                  <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#008080" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#008080" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#00000010" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#00000040', fontSize: 10, fontWeight: 'bold'}} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#00000040', fontSize: 10, fontWeight: 'bold'}} />
-                <Tooltip 
-                  contentStyle={{backgroundColor: '#fff', borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)', fontWeight: 'bold', fontSize: '10px'}}
-                />
-                <Area type="monotone" dataKey="value" stroke="#008080" strokeWidth={3} fillOpacity={1} fill="url(#colorValue)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
-
-      <div className="w-full lg:w-80 bg-white border-l border-gray-100 p-6 space-y-6 overflow-y-auto">
-        <div className="space-y-4">
-          <h3 className="font-black text-gray-900 flex items-center gap-2 text-base uppercase tracking-tight">
-            <div className="p-1.5 bg-[#008080]/10 rounded-lg text-[#008080]">
-              <FileSearch className="w-4 h-4" />
-            </div>
-            Interprétation IA
-          </h3>
-          
-          <div className="space-y-3">
-            <p className="text-xs text-gray-600 leading-relaxed">
-              L&apos;analyse biostatistique des données visualisées révèle plusieurs points critiques :
-            </p>
-            
-            <div className="p-3 bg-slate-50 rounded-xl border border-gray-100 space-y-2">
-              <div className="flex gap-2">
-                <div className="w-1 h-1 rounded-full bg-[#008080] mt-1.5 shrink-0" />
-                <p className="text-[10px] text-gray-700 leading-tight"><span className="font-black">Tendance Significative :</span> Une corrélation positive forte (r &gt; 0.75) est observée.</p>
-              </div>
-              <div className="flex gap-2">
-                <div className="w-1 h-1 rounded-full bg-[#008080] mt-1.5 shrink-0" />
-                <p className="text-[10px] text-gray-700 leading-tight"><span className="font-black">Stabilité :</span> L&apos;écart-type reste dans les limites de confiance de 95%.</p>
-              </div>
-              <div className="flex gap-2">
-                <div className="w-1 h-1 rounded-full bg-[#008080] mt-1.5 shrink-0" />
-                <p className="text-[10px] text-gray-700 leading-tight"><span className="font-black">Projection :</span> Une croissance soutenue est anticipée.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <button 
-          onClick={() => alert("Exportation du rapport biostatistique en cours...")}
-          className="w-full py-3 bg-[#008080] text-white rounded-xl font-black text-xs hover:bg-[#006666] transition-all shadow-md shadow-[#008080]/10 flex items-center justify-center gap-2"
-        >
-          <Download className="w-3.5 h-3.5" /> Exporter le Rapport
-        </button>
-      </div>
-    </div>
-  );
-};
-
-const AnalyseTab = () => {
-  const [preview, setPreview] = useState<string | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-
-  const handleAnalyze = () => {
-    if (!preview) {
-      alert("Veuillez d'abord sélectionner un cliché.");
-      return;
+export default function Home() {
+  const [activeTab, setActiveTab] = useState<'chat' | 'sessions' | 'sources' | 'stats' | 'calendar'>('chat');
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      id: '1',
+      role: 'assistant',
+      content: "Bonjour Docteur Eposse. Je suis DouliaMed, votre assistant de recherche. Comment puis-je vous accompagner dans vos travaux d'agrégation aujourd'hui ?",
+      timestamp: new Date(),
     }
-    setIsAnalyzing(true);
-    setTimeout(() => {
-      setIsAnalyzing(false);
-      alert("Analyse terminée. Rapport préliminaire disponible.");
-    }, 3000);
-  };
-
-  const handleFileSelect = () => {
-    setPreview("https://picsum.photos/seed/medical/800/800");
-  };
-
-  return (
-    <div className="p-6 space-y-6 max-w-5xl mx-auto bg-white min-h-full">
-      <div className="text-center space-y-2">
-        <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">Analyse d&apos;Imagerie Médicale</h2>
-        <p className="text-xs text-gray-500 max-w-xl mx-auto">Utilisez l&apos;IA pour assister votre diagnostic sur radios, scanners et IRM.</p>
-      </div>
-      
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="space-y-4">
-          <div 
-            onClick={handleFileSelect}
-            className="aspect-square bg-slate-50 border-2 border-dashed border-gray-200 rounded-[32px] flex flex-col items-center justify-center p-8 transition-all hover:border-[#008080] group cursor-pointer shadow-inner relative overflow-hidden"
-          >
-            {preview ? (
-              <div className="relative w-full h-full">
-                <Image src={preview} alt="Aperçu médical" fill className="object-contain rounded-xl" />
-                <button 
-                  onClick={(e) => { e.stopPropagation(); setPreview(null); }} 
-                  className="absolute top-3 right-3 p-1.5 bg-white/80 rounded-full shadow-md text-gray-800 hover:bg-white"
-                >
-                  <Plus className="w-3.5 h-3.5 rotate-45" />
-                </button>
-              </div>
-            ) : (
-              <>
-                <div className="w-16 h-16 rounded-2xl bg-[#008080]/5 flex items-center justify-center mb-4 text-[#008080] group-hover:scale-110 transition-transform shadow-sm">
-                  <Upload className="w-8 h-8" />
-                </div>
-                <p className="font-black text-gray-900 text-base uppercase tracking-tight">Téléversement</p>
-                <button className="mt-3 px-4 py-1.5 bg-white border border-gray-200 rounded-lg text-[11px] font-bold text-gray-700 hover:bg-gray-50 transition-all">
-                  Sélectionner un cliché
-                </button>
-                <p className="text-[9px] text-gray-400 mt-4 font-black uppercase tracking-widest">DICOM, JPG, PNG</p>
-              </>
-            )}
-          </div>
-
-          <button 
-            onClick={handleAnalyze}
-            disabled={isAnalyzing}
-            className="w-full py-4 bg-[#008080] text-white rounded-2xl font-black text-base shadow-lg shadow-[#008080]/10 hover:bg-[#006666] transition-all flex items-center justify-center gap-3 disabled:opacity-50"
-          >
-            {isAnalyzing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Search className="w-5 h-5" />}
-            {isAnalyzing ? "Analyse..." : "Lancer l'Analyse"}
-          </button>
-        </div>
-
-        <div className="space-y-4">
-          <div className="bg-slate-900 rounded-[32px] p-6 text-white h-full shadow-xl relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-6 opacity-10">
-              <Bot className="w-24 h-24" />
-            </div>
-            
-            <div className="relative z-10 space-y-6">
-              <div className="flex items-center justify-between">
-                <h3 className="text-base font-black flex items-center gap-2 uppercase tracking-tight">
-                  <div className="p-1.5 bg-white/10 rounded-lg">
-                    <FileText className="w-4 h-4 text-[#008080]" />
-                  </div>
-                  Rapport IA
-                </h3>
-                <span className="px-2 py-0.5 bg-[#008080] text-[8px] font-black uppercase tracking-widest rounded-full">Demo</span>
-              </div>
-
-              <div className="space-y-4">
-                <div className="space-y-1">
-                  <h4 className="text-[9px] font-black text-[#008080] uppercase tracking-widest">Exemple de Rapport</h4>
-                  <p className="text-xs text-gray-400 leading-relaxed">
-                    Téléversez un cliché pour une analyse réelle. Voici à quoi ressemblera votre rapport d&apos;assistance.
-                  </p>
-                </div>
-
-                <div className="space-y-3 pt-3 border-t border-white/10">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold text-gray-300">Confiance Diagnostic</span>
-                    <span className="text-xs font-black text-[#008080]">98.2%</span>
-                  </div>
-                  <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden">
-                    <div className="bg-[#008080] h-full w-[98%]"></div>
-                  </div>
-                </div>
-
-                <div className="p-3 bg-white/5 rounded-xl border border-white/10">
-                  <p className="text-[11px] text-gray-400 italic leading-relaxed">
-                    &quot;Présence d&apos;une opacité focale dans le lobe inférieur droit compatible avec un foyer de pneumopathie bactérienne. Recommandation : Corrélation clinique et biologique.&quot;
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// --- Chat Component ---
-
-const ChatTab = () => {
-  const [messages, setMessages] = useState<any[]>([]);
+  ]);
   const [input, setInput] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isListening, setIsListening] = useState(false);
-  const [statusMessage, setStatusMessage] = useState('');
-  const recognitionRef = useRef<any>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
-  const tavilyKey = process.env.NEXT_PUBLIC_TAVILY_API_KEY || "";
-  const ai = new GoogleGenAI({ apiKey });
-
-  useEffect(() => {
-    const loadMessages = async () => {
-      const { data } = await supabase
-        .from('messages')
-        .select('*')
-        .order('created_at', { ascending: true });
-      
-      if (data && data.length > 0) {
-        setMessages(data);
-      } else {
-        setMessages([{
-          id: 'welcome',
-          role: 'assistant',
-          content: WELCOME_MESSAGE,
-          created_at: new Date().toISOString()
-        }]);
-      }
-    };
-    loadMessages();
-  }, []);
-
-  useEffect(() => {
+  const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
   }, [messages]);
 
-  const handleSpeak = (text: string) => {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'fr-FR';
-      utterance.rate = 0.9;
-      window.speechSynthesis.speak(utterance);
-    }
-  };
+  const handleSend = async () => {
+    if (!input.trim() || isLoading) return;
 
-  const handleExportPDF = async (messageId: string) => {
-    const element = document.getElementById(`msg-${messageId}`);
-    if (element) {
-      // @ts-ignore
-      const html2pdf = (await import('html2pdf.js')).default;
-      const opt = {
-        margin: 1,
-        filename: `DouliaMed_Response_${messageId}.pdf`,
-        image: { type: 'jpeg' as const, quality: 0.98 },
-        html2canvas: { scale: 2 },
-        jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' as const }
-      };
-      html2pdf().set(opt).from(element).save();
-    }
-  };
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: input,
+      timestamp: new Date(),
+    };
 
-  const toggleListening = () => {
-    if (isListening) {
-      recognitionRef.current?.stop();
-      setIsListening(false);
-      return;
-    }
-
-    // @ts-ignore
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      const recognition = new SpeechRecognition();
-      recognition.lang = 'fr-FR';
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.onstart = () => setIsListening(true);
-      recognition.onend = () => { if (isListening) recognition.start(); };
-      recognition.onresult = (event: any) => {
-        let finalTranscript = '';
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript;
-        }
-        if (finalTranscript) setInput(prev => prev + (prev ? ' ' : '') + finalTranscript);
-      };
-      recognitionRef.current = recognition;
-      recognition.start();
-    } else {
-      alert("La reconnaissance vocale n'est pas supportée.");
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const userText = input.trim();
-    if (!userText || isGenerating) return;
-
+    setMessages(prev => [...prev, userMessage]);
     setInput('');
-    setIsGenerating(true);
-    setStatusMessage('DouliaMed analyse vos sources...');
+    setIsLoading(true);
 
-    const userMsg = { role: 'user', content: userText, created_at: new Date().toISOString() };
-    setMessages(prev => [...prev, userMsg]);
-    await supabase.from('messages').insert([userMsg]);
+    // Simulate AI Response
+    setTimeout(() => {
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: "D'après les derniers protocoles de l'OMS et vos travaux précédents sur la pédiatrie en zone tropicale, voici une synthèse structurée pour votre leçon d'agrégation...",
+        timestamp: new Date(),
+        sources: ['OMS_Malaria_Report_2024.pdf', 'Protocoles_Pediatrie_Douala.docx']
+      };
+      setMessages(prev => [...prev, assistantMessage]);
+      setIsLoading(false);
+    }, 1500);
+  };
 
-    try {
-      setStatusMessage('Recherche hybride en cours...');
-      // Tavily search
-      let tavilyCtx = "";
-      if (tavilyKey) {
-        const tRes = await fetch('https://api.tavily.com/search', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ api_key: tavilyKey, query: userText, search_depth: "advanced", max_results: 3 })
-        });
-        const tData = await tRes.json();
-        tavilyCtx = tData.results?.map((r: any) => `[Web: ${r.title}] ${r.content}`).join('\n\n') || "";
-      }
-
-      const chat = ai.chats.create({
-        model: "gemini-3-flash-preview",
-        config: { systemInstruction: SYSTEM_INSTRUCTION },
-        history: messages.map(m => ({
-          role: m.role === 'user' ? 'user' : 'model',
-          parts: [{ text: m.content }]
-        }))
-      });
-
-      const result = await chat.sendMessage({ message: `CONTEXTE WEB:\n${tavilyCtx}\n\nQUESTION: ${userText}` });
-      const assistantMsg = { role: 'assistant', content: result.text, created_at: new Date().toISOString() };
-      setMessages(prev => [...prev, assistantMsg]);
-      await supabase.from('messages').insert([assistantMsg]);
-    } catch (error) {
-      console.error(error);
-      setMessages(prev => [...prev, { role: 'assistant', content: "Erreur de génération.", created_at: new Date().toISOString() }]);
-    } finally {
-      setIsGenerating(false);
-      setStatusMessage('');
-    }
+  const toggleRecording = () => {
+    setIsRecording(!isRecording);
   };
 
   return (
-    <div className="flex flex-col h-full bg-white">
-      <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-hide">
-        <AnimatePresence initial={false}>
-          {messages.map((msg, idx) => (
-            <motion.div
-              key={msg.id || idx}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-            >
-              <div className={`flex gap-4 group ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm ${
-                  msg.role === 'user' ? 'bg-gray-100 text-gray-500' : 'bg-[#008080]/10 text-[#008080]'
-                }`}>
-                  {msg.role === 'user' ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
-                </div>
-                
-                <div className={`max-w-[85%] space-y-2 ${msg.role === 'user' ? 'text-right' : 'text-left'}`}>
-                  <div 
-                    id={`msg-${msg.id || idx}`}
-                    className={`p-4 rounded-2xl text-[13px] leading-relaxed shadow-sm border ${
-                      msg.role === 'user' 
-                        ? 'bg-gray-800 text-white border-gray-800 rounded-tr-none' 
-                        : 'bg-white text-gray-800 border-gray-100 rounded-tl-none'
-                    }`}
-                  >
-                    <div className="prose prose-sm max-w-none prose-headings:text-[#008080] prose-strong:text-[#008080]">
-                      <div dangerouslySetInnerHTML={{ 
-                        __html: msg.content
-                          .replace(/\*\*(.*?)\*\*/g, '<span class="text-[#008080] font-black">$1</span>')
-                          .replace(/^\s*\d+\.\s/gm, (match: string) => `<span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#008080] text-white text-[9px] font-black mr-2">${match.trim().split('.')[0]}</span>`)
-                          .replace(/\n/g, '<br/>')
-                      }} />
+    <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
+      {/* Sidebar */}
+      <aside className="w-72 bg-white border-r border-slate-200 flex flex-col shadow-sm z-20">
+        <div className="p-6 border-b border-slate-100">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-100">
+              <Bot className="text-white w-6 h-6" />
+            </div>
+            <div>
+              <h1 className="font-bold text-slate-900 text-lg tracking-tight">DouliaMed</h1>
+              <p className="text-[10px] text-indigo-600 font-bold uppercase tracking-widest">Excellence Académique</p>
+            </div>
+          </div>
+        </div>
+
+        <nav className="flex-1 p-4 space-y-2 overflow-y-auto scrollbar-hide">
+          <button 
+            onClick={() => setActiveTab('chat')}
+            className={`nav-item w-full ${activeTab === 'chat' ? 'nav-item-active' : 'nav-item-inactive'}`}
+          >
+            <MessageSquare size={20} />
+            <span className="font-medium">Assistant IA</span>
+          </button>
+          
+          <button 
+            onClick={() => setActiveTab('sessions')}
+            className={`nav-item w-full ${activeTab === 'sessions' ? 'nav-item-active' : 'nav-item-inactive'}`}
+          >
+            <History size={20} />
+            <span className="font-medium">Sessions de Travail</span>
+          </button>
+
+          <button 
+            onClick={() => setActiveTab('sources')}
+            className={`nav-item w-full ${activeTab === 'sources' ? 'nav-item-active' : 'nav-item-inactive'}`}
+          >
+            <FileSearch size={20} />
+            <span className="font-medium">Base Documentaire</span>
+          </button>
+
+          <button 
+            onClick={() => setActiveTab('stats')}
+            className={`nav-item w-full ${activeTab === 'stats' ? 'nav-item-active' : 'nav-item-inactive'}`}
+          >
+            <BarChart3 size={20} />
+            <span className="font-medium">Biostatistiques</span>
+          </button>
+
+          <button 
+            onClick={() => setActiveTab('calendar')}
+            className={`nav-item w-full ${activeTab === 'calendar' ? 'nav-item-active' : 'nav-item-inactive'}`}
+          >
+            <Calendar size={20} />
+            <span className="font-medium">Chronogramme</span>
+          </button>
+        </nav>
+
+        <div className="p-4 border-t border-slate-100">
+          <div className="bg-slate-50 rounded-2xl p-4 flex items-center gap-3 mb-4">
+            <div className="relative">
+              <Image 
+                src="https://i.postimg.cc/v8hD1LQP/Whats_App_Image_2026_03_24_at_06_04_08.jpg" 
+                alt="Dr Charlotte Eposse" 
+                width={40} 
+                height={40} 
+                className="rounded-full object-cover border-2 border-white shadow-sm"
+                referrerPolicy="no-referrer"
+              />
+              <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
+            </div>
+            <div className="overflow-hidden">
+              <p className="text-sm font-bold text-slate-900 truncate">Dr Charlotte Eposse</p>
+              <p className="text-[10px] text-slate-500 truncate">Pédiatre Chercheuse</p>
+            </div>
+          </div>
+          <button className="flex items-center gap-2 text-slate-400 hover:text-red-600 transition-colors w-full px-4 py-2 text-sm font-medium">
+            <LogOut size={16} />
+            <span>Déconnexion</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <main className="flex-1 flex flex-col relative bg-slate-50">
+        {/* Header */}
+        <header className="h-20 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 z-10">
+          <div className="flex items-center gap-4">
+            <h2 className="text-xl font-bold text-slate-900">
+              {activeTab === 'chat' && "Assistant de Recherche"}
+              {activeTab === 'sessions' && "Historique des Sessions"}
+              {activeTab === 'sources' && "Bibliothèque Médicale"}
+              {activeTab === 'stats' && "Analyse de Données"}
+              {activeTab === 'calendar' && "Planning d'Agrégation"}
+            </h2>
+            <div className="h-6 w-px bg-slate-200 mx-2"></div>
+            <div className="flex items-center gap-2 text-slate-500 text-sm font-medium">
+              <Calendar size={16} />
+              <span>{new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long' }).format(new Date())}</span>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <button className="p-2.5 text-slate-500 hover:bg-slate-100 rounded-xl transition-all">
+              <Search size={20} />
+            </button>
+            <button className="p-2.5 text-slate-500 hover:bg-slate-100 rounded-xl transition-all">
+              <Settings size={20} />
+            </button>
+            <button className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95">
+              <Plus size={18} />
+              <span>Nouvelle Étude</span>
+            </button>
+          </div>
+        </header>
+
+        {/* Content Area */}
+        <div className="flex-1 overflow-y-auto p-8 scrollbar-hide">
+          <AnimatePresence mode="wait">
+            {activeTab === 'chat' && (
+              <motion.div 
+                key="chat"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="max-w-4xl mx-auto h-full flex flex-col"
+              >
+                <div className="flex-1 space-y-8 pb-32">
+                  {messages.map((msg) => (
+                    <div 
+                      key={msg.id} 
+                      className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div className={`flex gap-4 max-w-[85%] ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                        <div className={`w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center shadow-sm ${
+                          msg.role === 'user' ? 'bg-indigo-600' : 'bg-white border border-slate-200'
+                        }`}>
+                          {msg.role === 'user' ? <User className="text-white w-5 h-5" /> : <Bot className="text-indigo-600 w-5 h-5" />}
+                        </div>
+                        <div className="space-y-2">
+                          <div className={`p-5 rounded-2xl shadow-sm ${
+                            msg.role === 'user' 
+                              ? 'bg-indigo-600 text-white rounded-tr-none' 
+                              : 'bg-white border border-slate-200 text-slate-800 rounded-tl-none'
+                          }`}>
+                            <div className="markdown-body">
+                              <Markdown>{msg.content}</Markdown>
+                            </div>
+                          </div>
+                          
+                          {msg.sources && (
+                            <div className="flex flex-wrap gap-2 mt-3">
+                              {msg.sources.map((source, idx) => (
+                                <div key={idx} className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-[11px] font-bold border border-indigo-100">
+                                  <FileText size={12} />
+                                  <span>{source}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          
+                          <p className="text-[10px] text-slate-400 font-medium px-1">
+                            {msg.timestamp.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  
-                  {msg.role === 'assistant' && (
-                    <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <div className="flex items-center bg-slate-50 rounded-md border border-slate-100 overflow-hidden">
-                        <button 
-                          onClick={() => handleSpeak(msg.content)}
-                          className="flex items-center gap-1.5 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-[#008080] hover:bg-[#008080]/10 transition-all border-r border-slate-100"
-                        >
-                          <Volume2 className="w-3 h-3" /> Écouter
-                        </button>
-                        <button 
-                          onClick={() => handleExportPDF(msg.id || idx)}
-                          className="flex items-center gap-1.5 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-gray-400 hover:bg-gray-100 transition-all"
-                        >
-                          <Download className="w-3 h-3" /> PDF
-                        </button>
+                  ))}
+                  {isLoading && (
+                    <div className="flex justify-start">
+                      <div className="flex gap-4">
+                        <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center shadow-sm">
+                          <Bot className="text-indigo-600 w-5 h-5" />
+                        </div>
+                        <div className="bg-white border border-slate-200 p-5 rounded-2xl rounded-tl-none shadow-sm flex items-center gap-3">
+                          <Loader2 className="w-5 h-5 text-indigo-600 animate-spin" />
+                          <span className="text-sm text-slate-500 font-medium">DouliaMed analyse vos données...</span>
+                        </div>
                       </div>
                     </div>
                   )}
+                  <div ref={messagesEndRef} />
                 </div>
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-        
-        {isGenerating && (
-          <div className="flex gap-4">
-            <div className="w-8 h-8 rounded-lg bg-[#008080]/10 flex items-center justify-center text-[#008080]">
-              <Loader2 className="w-4 h-4 animate-spin" />
-            </div>
-            <div className="bg-slate-50/50 p-3 rounded-xl rounded-tl-none border border-slate-100">
-              <span className="text-[10px] font-bold text-[#008080] uppercase tracking-wider">{statusMessage}</span>
-            </div>
-          </div>
-        )}
-        <div ref={messagesEndRef} />
-      </div>
 
-      <div className="px-6 py-4 bg-white/80 backdrop-blur-sm border-t border-gray-100">
-        <div className="max-w-3xl mx-auto">
-          <form onSubmit={handleSubmit} className="relative flex items-center gap-2 bg-slate-50 border border-gray-200 p-1.5 rounded-xl shadow-inner focus-within:border-[#008080] transition-all">
-            <input type="file" ref={fileInputRef} className="hidden" accept=".pdf,.doc,.docx,image/*" />
-            <button type="button" onClick={() => fileInputRef.current?.click()} className="p-2 text-gray-400 hover:text-[#008080] transition-colors rounded-lg hover:bg-white">
-              <Paperclip className="w-5 h-5" />
-            </button>
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Posez votre question médicale..."
-              className="flex-1 bg-transparent border-none py-2 text-gray-800 placeholder-gray-400 focus:outline-none text-[13px] font-medium"
-            />
-            <button type="button" onClick={toggleListening} className={`p-2 transition-colors rounded-lg hover:bg-white ${isListening ? 'text-red-500 bg-red-50 animate-pulse' : 'text-gray-400 hover:text-[#008080]'}`}>
-              {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-            </button>
-            <button type="submit" disabled={isGenerating || !input.trim()} className={`p-2 rounded-lg transition-all ${input.trim() ? 'bg-[#008080] text-white shadow-md hover:scale-105' : 'bg-gray-200 text-gray-400'}`}>
-              <Send className="w-5 h-5" />
-            </button>
-          </form>
-          <div className="mt-2 flex justify-center gap-8 text-[8px] font-black text-gray-300 uppercase tracking-[0.3em]">
-            <span>PROPULSÉ PAR DOULIA</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// --- Main Page ---
-
-export default function Home() {
-  const [activeTab, setActiveTab] = useState('chat');
-  const [showSettings, setShowSettings] = useState(true);
-
-  const tabs = [
-    { id: 'chat', label: 'Chat', icon: MessageSquare },
-    { id: 'sessions', label: 'Sessions', icon: History },
-    { id: 'sources', label: 'Sources', icon: FileText },
-    { id: 'tasks', label: 'Tâches', icon: CheckSquare },
-    { id: 'chrono', label: 'Chrono', icon: Calendar },
-    { id: 'visu', label: 'Visu', icon: BarChart3 },
-    { id: 'analyse', label: 'Analyse', icon: Search },
-  ];
-
-  return (
-    <div className="flex flex-col h-screen bg-transparent text-gray-800 overflow-hidden font-sans">
-      <header className="bg-white/70 backdrop-blur-md border-b border-gray-200/50 px-6 py-2 flex flex-col md:flex-row items-center justify-between z-50 shadow-sm gap-4">
-        <div className="flex items-center gap-3">
-          <div className="relative w-8 h-8 rounded-lg overflow-hidden border border-[#008080]/20">
-            <Image 
-              src="https://i.postimg.cc/v8hD1LQP/Whats_App_Image_2026_03_24_at_06_04_08.jpg" 
-              alt="DouliaMed Logo" 
-              fill 
-              className="object-cover"
-              referrerPolicy="no-referrer"
-            />
-          </div>
-          <div>
-            <h1 className="text-base font-black tracking-tight text-gray-900">DouliaMed</h1>
-            <p className="text-[8px] text-[#008080] font-bold uppercase tracking-widest">Assistant Médical IA</p>
-          </div>
-        </div>
-
-        <nav className="flex flex-wrap justify-center gap-1 bg-slate-100/50 p-1 rounded-lg border border-gray-200/50">
-          {tabs.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-bold transition-all ${
-                activeTab === tab.id 
-                  ? 'bg-[#008080] text-white shadow-sm' 
-                  : 'text-gray-500 hover:text-gray-900 hover:bg-white/50'
-              }`}
-            >
-              <tab.icon className={`w-3.5 h-3.5 ${activeTab === tab.id ? 'text-white' : 'text-gray-400'}`} />
-              {tab.label}
-            </button>
-          ))}
-        </nav>
-
-        <div className="flex items-center gap-3">
-          <div className="text-right hidden lg:block">
-            <p className="text-xs font-bold text-gray-900">Dr. Charlotte Eposse</p>
-            <p className="text-[9px] text-[#008080] font-bold uppercase tracking-widest">Pédiatre & Chercheuse</p>
-          </div>
-          <div className="relative w-8 h-8 rounded-full overflow-hidden border-2 border-[#008080]">
-            <Image 
-              src="https://api.dicebear.com/7.x/avataaars/svg?seed=Charlotte" 
-              alt="Avatar Docteur" 
-              fill 
-              className="object-cover"
-              referrerPolicy="no-referrer"
-            />
-          </div>
-          <button 
-            onClick={() => setShowSettings(!showSettings)}
-            className={`p-1.5 rounded-md transition-colors ${showSettings ? 'text-[#008080] bg-[#008080]/10' : 'text-gray-400 hover:text-gray-900'}`}
-          >
-            <Settings className="w-4 h-4" />
-          </button>
-        </div>
-      </header>
-
-      <div className="flex-1 flex overflow-hidden">
-        <main className="flex-1 overflow-hidden relative flex flex-col">
-          <div className="flex-1 overflow-hidden relative">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={activeTab}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.2 }}
-              >
-                <div className="h-full overflow-y-auto scrollbar-hide">
-                  {activeTab === 'chat' && <ChatTab />}
-                  {activeTab === 'sessions' && <SessionsTab setActiveTab={setActiveTab} />}
-                  {activeTab === 'sources' && <SourcesTab />}
-                  {activeTab === 'tasks' && <TasksTab />}
-                  {activeTab === 'chrono' && <ChronoTab />}
-                  {activeTab === 'visu' && <VisuTab />}
-                  {activeTab === 'analyse' && <AnalyseTab />}
+                {/* Input Area */}
+                <div className="fixed bottom-8 left-72 right-0 px-8 pointer-events-none">
+                  <div className="max-w-4xl mx-auto pointer-events-auto">
+                    <div className="bg-white border border-slate-200 rounded-2xl shadow-2xl p-2 flex items-end gap-2 focus-within:border-indigo-400 transition-all">
+                      <div className="flex items-center gap-1 p-1">
+                        <button className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all">
+                          <Paperclip size={20} />
+                        </button>
+                        <button 
+                          onClick={toggleRecording}
+                          className={`p-2.5 rounded-xl transition-all ${isRecording ? 'bg-red-50 text-red-600 animate-pulse' : 'text-slate-400 hover:text-indigo-600 hover:bg-indigo-50'}`}
+                        >
+                          {isRecording ? <MicOff size={20} /> : <Mic size={20} />}
+                        </button>
+                      </div>
+                      
+                      <textarea
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSend();
+                          }
+                        }}
+                        placeholder="Posez votre question médicale ou demandez une analyse..."
+                        className="flex-1 bg-transparent border-none focus:ring-0 text-slate-800 placeholder:text-slate-400 py-3 px-2 resize-none max-h-40 min-h-[48px] scrollbar-hide"
+                        rows={1}
+                      />
+                      
+                      <div className="p-1">
+                        <button 
+                          onClick={handleSend}
+                          disabled={!input.trim() || isLoading}
+                          className={`p-3 rounded-xl transition-all shadow-lg ${
+                            !input.trim() || isLoading 
+                              ? 'bg-slate-100 text-slate-400 cursor-not-allowed' 
+                              : 'bg-indigo-600 text-white shadow-indigo-200 hover:bg-indigo-700 active:scale-95'
+                          }`}
+                        >
+                          <Send size={20} />
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-center text-[10px] text-slate-400 mt-3 font-medium">
+                      DouliaMed peut faire des erreurs. Vérifiez les informations médicales critiques.
+                    </p>
+                  </div>
                 </div>
               </motion.div>
-            </AnimatePresence>
-          </div>
-        </main>
+            )}
 
-        {showSettings && (
-          <aside className="w-72 bg-white/80 backdrop-blur-md border-l border-gray-200 p-5 overflow-y-auto hidden xl:block shadow-xl">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">Paramètres</h3>
-              <button onClick={() => setShowSettings(false)} className="text-gray-400 hover:text-gray-900 transition-colors">
-                <Plus className="w-5 h-5 rotate-45" />
-              </button>
-            </div>
-            
-            <div className="space-y-8">
-              <section>
-                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Préférences IA</h4>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-gray-100">
-                    <span className="text-sm font-bold text-gray-700">Mode Recherche</span>
-                    <div className="w-10 h-5 bg-[#008080] rounded-full relative">
-                      <div className="absolute right-1 top-1 w-3 h-3 bg-white rounded-full"></div>
+            {activeTab === 'sessions' && (
+              <motion.div 
+                key="sessions"
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="max-w-5xl mx-auto space-y-6"
+              >
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {MOCK_SESSIONS.map((session) => (
+                    <div key={session.id} className="bg-white border border-slate-200 rounded-2xl p-6 hover:shadow-xl transition-all group cursor-pointer border-b-4 border-b-indigo-600/0 hover:border-b-indigo-600">
+                      <div className="flex justify-between items-start mb-4">
+                        <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600">
+                          <History size={24} />
+                        </div>
+                        <button className="text-slate-300 hover:text-red-500 transition-colors">
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                      <h3 className="font-bold text-slate-900 mb-2 group-hover:text-indigo-600 transition-colors">{session.title}</h3>
+                      <p className="text-sm text-slate-500 line-clamp-2 mb-4 leading-relaxed">{session.lastMessage}</p>
+                      <div className="flex items-center justify-between pt-4 border-t border-slate-50">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          {new Intl.DateTimeFormat('fr-FR').format(session.date)}
+                        </span>
+                        <ChevronRight size={16} className="text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-1 transition-all" />
+                      </div>
+                    </div>
+                  ))}
+                  <button className="border-2 border-dashed border-slate-200 rounded-2xl p-6 flex flex-col items-center justify-center gap-3 text-slate-400 hover:border-indigo-300 hover:text-indigo-600 transition-all bg-white/50">
+                    <Plus size={32} />
+                    <span className="font-bold text-sm">Nouvelle Session</span>
+                  </button>
+                </div>
+              </motion.div>
+            )}
+
+            {activeTab === 'sources' && (
+              <motion.div 
+                key="sources"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="max-w-5xl mx-auto"
+              >
+                <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+                  <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-600">
+                        <Upload size={16} />
+                        <span>Importer</span>
+                      </div>
+                      <div className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-600">
+                        <Download size={16} />
+                        <span>Exporter</span>
+                      </div>
+                    </div>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                      <input 
+                        type="text" 
+                        placeholder="Rechercher un document..." 
+                        className="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent w-64"
+                      />
                     </div>
                   </div>
-                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-gray-100">
-                    <span className="text-sm font-bold text-gray-700">Synthèse Vocale</span>
-                    <div className="w-10 h-5 bg-[#008080] rounded-full relative">
-                      <div className="absolute right-1 top-1 w-3 h-3 bg-white rounded-full"></div>
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="bg-slate-50/50 text-slate-400 text-[10px] font-bold uppercase tracking-widest border-b border-slate-100">
+                        <th className="px-8 py-4">Document</th>
+                        <th className="px-8 py-4">Type</th>
+                        <th className="px-8 py-4">Date d'ajout</th>
+                        <th className="px-8 py-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {MOCK_SOURCES.map((source) => (
+                        <tr key={source.id} className="hover:bg-slate-50/50 transition-colors group">
+                          <td className="px-8 py-5">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                                source.type === 'pdf' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'
+                              }`}>
+                                <FileText size={20} />
+                              </div>
+                              <span className="font-bold text-slate-700 group-hover:text-indigo-600 transition-colors">{source.title}</span>
+                            </div>
+                          </td>
+                          <td className="px-8 py-5">
+                            <span className={`status-badge ${
+                              source.type === 'pdf' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
+                            }`}>
+                              {source.type}
+                            </span>
+                          </td>
+                          <td className="px-8 py-5 text-sm text-slate-500 font-medium">{source.date}</td>
+                          <td className="px-8 py-5 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all">
+                                <ExternalLink size={18} />
+                              </button>
+                              <button className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all">
+                                <Trash2 size={18} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </motion.div>
+            )}
+
+            {activeTab === 'stats' && (
+              <motion.div 
+                key="stats"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="max-w-6xl mx-auto space-y-8"
+              >
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                  {[
+                    { label: "Articles Rédigés", value: "14", icon: FileText, color: "text-blue-600", bg: "bg-blue-50" },
+                    { label: "Données Analysées", value: "1.2k", icon: BarChart3, color: "text-indigo-600", bg: "bg-indigo-50" },
+                    { label: "Taux de Réussite", value: "94%", icon: CheckSquare, color: "text-green-600", bg: "bg-green-50" },
+                    { label: "Heures de Travail", value: "320h", icon: Calendar, color: "text-amber-600", bg: "bg-amber-50" },
+                  ].map((stat, idx) => (
+                    <div key={idx} className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm">
+                      <div className={`w-12 h-12 ${stat.bg} ${stat.color} rounded-2xl flex items-center justify-center mb-4`}>
+                        <stat.icon size={24} />
+                      </div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{stat.label}</p>
+                      <h4 className="text-2xl font-black text-slate-900">{stat.value}</h4>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="bg-white border border-slate-200 p-8 rounded-3xl shadow-sm">
+                  <div className="flex items-center justify-between mb-8">
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-900">Progression de la Recherche</h3>
+                      <p className="text-sm text-slate-500">Volume de données traitées par mois</p>
+                    </div>
+                    <select className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm font-medium text-slate-600 outline-none focus:ring-2 focus:ring-indigo-500">
+                      <option>Année 2026</option>
+                      <option>Année 2025</option>
+                    </select>
+                  </div>
+                  <div className="h-80 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={[
+                        { name: 'Jan', value: 400 },
+                        { name: 'Feb', value: 300 },
+                        { name: 'Mar', value: 600 },
+                        { name: 'Apr', value: 800 },
+                        { name: 'May', value: 500 },
+                        { name: 'Jun', value: 900 },
+                      ]}>
+                        <defs>
+                          <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.1}/>
+                            <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} dy={10} />
+                        <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} />
+                        <Tooltip 
+                          contentStyle={{backgroundColor: '#fff', borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
+                        />
+                        <Area type="monotone" dataKey="value" stroke="#4f46e5" strokeWidth={3} fillOpacity={1} fill="url(#colorValue)" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {activeTab === 'calendar' && (
+              <motion.div 
+                key="calendar"
+                initial={{ opacity: 0, scale: 1.02 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="max-w-4xl mx-auto"
+              >
+                <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm">
+                  <div className="flex items-center justify-between mb-8">
+                    <h3 className="text-xl font-bold text-slate-900">Objectifs d'Agrégation</h3>
+                    <div className="flex gap-2">
+                      <button className="p-2 text-slate-400 hover:bg-slate-50 rounded-lg transition-all"><ChevronRight className="rotate-180" /></button>
+                      <button className="p-2 text-slate-400 hover:bg-slate-50 rounded-lg transition-all"><ChevronRight /></button>
                     </div>
                   </div>
-                </div>
-              </section>
-
-              <section>
-                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Base de Données</h4>
-                <div className="p-4 bg-[#008080]/5 rounded-xl border border-[#008080]/10">
-                  <p className="text-xs text-[#008080] font-bold mb-2">Supabase Connecté</p>
-                  <div className="w-full bg-gray-200 h-1.5 rounded-full overflow-hidden">
-                    <div className="bg-[#008080] h-full w-3/4"></div>
+                  <div className="space-y-4">
+                    {[
+                      { title: "Finalisation Titres et Travaux", date: "15 Avril 2026", progress: 85, color: "bg-indigo-600" },
+                      { title: "Rédaction Mémoire Principal", date: "30 Mai 2026", progress: 45, color: "bg-blue-500" },
+                      { title: "Préparation Leçon Clinique", date: "12 Juin 2026", progress: 20, color: "bg-amber-500" },
+                    ].map((task, idx) => (
+                      <div key={idx} className="p-6 bg-slate-50 rounded-2xl border border-slate-100 hover:border-indigo-200 transition-all group">
+                        <div className="flex justify-between items-start mb-4">
+                          <div>
+                            <h4 className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">{task.title}</h4>
+                            <p className="text-xs text-slate-500 font-medium mt-1">Échéance : {task.date}</p>
+                          </div>
+                          <span className="text-sm font-black text-indigo-600">{task.progress}%</span>
+                        </div>
+                        <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                          <motion.div 
+                            initial={{ width: 0 }}
+                            animate={{ width: `${task.progress}%` }}
+                            transition={{ duration: 1, delay: idx * 0.2 }}
+                            className={`h-full ${task.color}`}
+                          />
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <p className="text-[10px] text-gray-400 mt-2">75% de stockage utilisé</p>
                 </div>
-              </section>
-
-              <button className="w-full flex items-center justify-center gap-3 px-4 py-3 text-red-500 hover:bg-red-50 rounded-xl transition-all text-sm font-bold border border-red-100">
-                <LogOut className="w-5 h-5" />
-                <span>Déconnexion</span>
-              </button>
-            </div>
-          </aside>
-        )}
-      </div>
-
-      <footer className="bg-white border-t border-gray-200 px-8 py-2 flex justify-between items-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-        <div className="flex gap-4">
-          <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-green-500"></span> Système Opérationnel</span>
-          <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#008080]"></span> IA : Gemini 3 Flash</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
-        <div>DouliaMed © 2026 — Partenaire d&apos;Excellence</div>
-      </footer>
+      </main>
     </div>
   );
 }

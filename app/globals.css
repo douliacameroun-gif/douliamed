@@ -1,65 +1,73 @@
 @import "tailwindcss";
 @plugin "tailwind-scrollbar-hide";
 
-@theme {
-  --color-background: #ffffff;
-  --color-panel: #f8fafc;
-  --color-accent: #008080;
-  --color-accent-hover: #006666;
-  --color-text-primary: #1e293b;
-  --color-text-secondary: #64748b;
-}
-
 :root {
-  background-color: var(--color-background);
-  color: var(--color-text-primary);
-  font-family: 'Inter', sans-serif;
+  --background: #f8fafc;
+  --foreground: #0f172a;
 }
 
 body {
-  margin: 0;
-  padding: 0;
-  overflow-x: hidden;
-  background: radial-gradient(circle at top left, #ffffff, #f8fafc, #f1f5f9);
-  min-height: 100vh;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
 }
 
-.soft-block {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(226, 232, 240, 0.5);
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-  border-radius: 0.75rem;
+.markdown-body {
+  @apply text-slate-700 leading-relaxed;
 }
 
-.soft-button {
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  border-radius: 0.5rem;
+.markdown-body h1 {
+  @apply text-2xl font-bold text-slate-900 mt-6 mb-4;
 }
 
-.soft-button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+.markdown-body h2 {
+  @apply text-xl font-semibold text-slate-800 mt-5 mb-3;
 }
 
-.soft-button:active {
-  transform: translateY(0);
+.markdown-body p {
+  @apply mb-4;
 }
 
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
+.markdown-body ul {
+  @apply list-disc pl-6 mb-4;
 }
 
-::-webkit-scrollbar-track {
-  background: transparent;
+.markdown-body li {
+  @apply mb-1;
 }
 
-::-webkit-scrollbar-thumb {
-  background: #e2e8f0;
-  border-radius: 10px;
+.markdown-body strong {
+  @apply font-bold text-slate-900;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-accent);
+.markdown-body blockquote {
+  @apply border-l-4 border-slate-200 pl-4 italic my-4;
+}
+
+.glass-card {
+  @apply bg-white/80 backdrop-blur-md border border-white/20 shadow-xl;
+}
+
+.nav-item {
+  @apply flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200;
+}
+
+.nav-item-active {
+  @apply bg-indigo-600 text-white shadow-lg shadow-indigo-200;
+}
+
+.nav-item-inactive {
+  @apply text-slate-500 hover:bg-slate-100 hover:text-slate-900;
+}
+
+.btn-primary {
+  @apply bg-indigo-600 text-white px-6 py-3 rounded-xl font-medium hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95;
+}
+
+.btn-secondary {
+  @apply bg-white text-slate-700 border border-slate-200 px-6 py-3 rounded-xl font-medium hover:bg-slate-50 transition-all active:scale-95;
+}
+
+.status-badge {
+  @apply px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider;
 }
